@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — จัดการการเงิน</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let ledger = loadTransactionsLedger();
+let financeRequests = loadFinanceRequests();
+document.getElementById('root').innerHTML = adminShell('admin-transactions.html', ADMIN_ACCOUNT);
+if(!guardAdminRole('superadmin', 'จัดการการเงิน')) throw new Error('บทบาทนี้ไม่มีสิทธิ์เข้าถึงหน้าจัดการการเงิน');
+
+// The current balance of the player behind a request — 'kim' is the one real demo login
+// (its balance lives in the shared wallet Store slot), every other player id is one of the
+// fictional rows on "จัดการสมาชิก" and keeps its balance there instead.
+function balanceOf(playerId){
+  if(playerId==='kim') return loadBalance();
+  const p = loadPlayers().find(x=>x.id===playerId);
+  return p ? p.balance : 0;
+}
+function applyBalanceDelta(playerId, delta){
+  if(playerId==='kim'){
+    saveBalance(loadBalance()+delta);
+  } else {
+    const players = loadPlayers();
+    const p = players.find(x=>x.id===playerId);
+    if(p){ p.balance += delta; savePlayers(players); }
+  }
+}
+function approveFinanceRequest(id){
+  const r = financeRequests.find(x=>x.id===id);
+  if(!r || r.status!=='pending') return;
+  if(r.type==='withdraw' && balanceOf(r.playerId) < r.amount){
+    toast('ยอดคงเหลือของ '+r.player+' ไม่พอสำหรับการถอนนี้แล้ว — ปฏิเสธคำขอแทน', true);
+    return;
+  }
+  applyBalanceDelta(r.playerId, r.type==='deposit' ? r.amount : -r.amount);
+  if(r.playerId==='kim'){
+    const tx = loadTransactions();
+    tx.unshift({ type:r.type, amount:r.amount, note:(r.type==='deposit'?'เงินฝากได้รับการอนุมัติแล้ว':'การถอนเงินได้รับการอนุมัติแล้ว'), time:'เมื่อสักครู่' });
+    saveTransactions(tx);
+    const notifications = loadNotifications();
+    notifications.unshift({ text:(r.type==='deposit'?'คำขอฝากเงิน ':'คำขอถอนเงิน ')+money(r.amount)+' ของคุณได้รับการอนุมัติแล้ว', time:'เมื่อสักครู่', read:false });
+    saveNotifications(notifications);
+  }
+  financeRequests = financeRequests.filter(x=>x.id!==id);
+  saveFinanceRequests(financeRequests);
+  ledger.unshift({ player:r.player, type:r.type, amount:r.amount, time:'เมื่อสักครู่' });
+  saveTransactionsLedger(ledger);
+  toast('อนุมัติการ'+(r.type==='deposit'?'ฝากเงิน ':'ถอนเงิน ')+money(r.amount)+' ของ '+r.player+' แล้ว');
+  draw();
+}
+function rejectFinanceRequest(id){
+  const r = financeRequests.find(x=>x.id===id);
+  if(!r) return;
+  financeRequests = financeRequests.filter(x=>x.id!==id);
+  saveFinanceRequests(financeRequests);
+  if(r.playerId==='kim'){
+    const notifications = loadNotifications();
+    notifications.unshift({ text:(r.type==='deposit'?'คำขอฝากเงิน ':'คำขอถอนเงิน ')+money(r.amount)+' ของคุณถูกปฏิเสธ — ติดต่อฝ่ายสนับสนุนหากคุณคิดว่านี่เป็นความผิดพลาด', time:'เมื่อสักครู่', read:false });
+    saveNotifications(notifications);
+  }
+  toast('ปฏิเสธคำขอ'+(r.type==='deposit'?'ฝากเงิน ':'ถอนเงิน ')+money(r.amount)+' ของ '+r.player+' แล้ว');
+  draw();
+}
+
+function draw(){
+  const filter = qs('type') || 'all';
+  const rows = ledger.filter(t=>filter==='all'||t.type===filter);
+  const totals = {
+    deposit: ledger.filter(t=>t.type==='deposit').reduce((s,t)=>s+t.amount,0),
+    withdraw: ledger.filter(t=>t.type==='withdraw').reduce((s,t)=>s+t.amount,0),
+    trade_fee: ledger.filter(t=>t.type==='trade_fee').reduce((s,t)=>s+t.amount,0),
+    payout: ledger.filter(t=>t.type==='payout').reduce((s,t)=>s+t.amount,0),
+  };
+  const typeLabel = { deposit:'ฝากเงิน', withdraw:'ถอนเงิน', trade_fee:'ค่าธรรมเนียมการเทรด', payout:'จ่ายผลตอบแทน' };
+  const typeBadge = { deposit:'badge-yes', withdraw:'badge-no', trade_fee:'badge-accent', payout:'badge-warn' };
+  const pendingRequests = financeRequests.filter(r=>r.status==='pending');
+  const reqTypeLabel = { deposit:'ฝากเงิน', withdraw:'ถอนเงิน' };
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>จัดการการเงิน</h1><div class="sub">บัญชีแยกประเภทของทั้งแพลตฟอร์ม เรียงจากล่าสุด</div></div>
+    <div class="page-note">นี่คือด้านการเคลื่อนไหวของเงินในภาพรวมกำไร ได้แก่ การฝากและถอนที่ผู้เล่นทำเอง ค่าธรรมเนียมการเทรดที่แพลตฟอร์มเก็บ และเงินจ่ายผลตอบแทนเมื่อมีการตัดสินผลตลาด ในระบบจริงข้อมูลนี้จะดึงมาจากผู้ให้บริการชำระเงิน/การชำระบัญชีบนเชนโดยตรง</div>
+    ${pendingRequests.length ? `
+    <h3 style="font-size:15px;margin-bottom:8px;">คำขอฝาก/ถอนที่รออนุมัติ <span class="badge badge-warn">${pendingRequests.length}</span></h3>
+    <div class="card table-wrap" style="margin-bottom:24px;"><table>
+      <tr><th>ผู้เล่น</th><th>ประเภท</th><th>จำนวนเงิน</th><th>บัญชีธนาคาร (สำหรับถอน)</th><th>เมื่อไหร่</th><th></th></tr>
+      ${pendingRequests.map(r=>{
+        const bank = r.type==='withdraw' && r.playerId==='kim' ? loadBankAccount() : null;
+        const bankCell = !bank ? '<span class="sub">—</span>'
+          : bank.bank && bank.accountNumber ? `<span class="sub">${esc(bank.bank)} · ${esc(bank.accountNumber)}${bank.accountName?' · '+esc(bank.accountName):''}</span>`
+          : `<span class="sub" style="color:var(--warn);">ผู้เล่นยังไม่ได้บันทึกบัญชีธนาคาร</span>`;
+        return `<tr>
+        <td><a href="profile.html?id=${r.player==='You'?'me':r.player.toLowerCase()}">${esc(r.player)}</a></td>
+        <td><span class="badge ${r.type==='deposit'?'badge-yes':'badge-no'}">${reqTypeLabel[r.type]}</span></td>
+        <td class="mono">${money(r.amount)}</td>
+        <td>${bankCell}</td>
+        <td class="sub">${r.time}</td>
+        <td><div style="display:flex;gap:6px;">
+          <button class="btn btn-sm btn-yes" onclick="approveFinanceRequest('${r.id}')">อนุมัติ</button>
+          <button class="btn btn-sm btn-no" onclick="rejectFinanceRequest('${r.id}')">ปฏิเสธ</button>
+        </div></td>
+      </tr>`;}).join('')}
+    </table></div>
+    ` : ''}
+    <div class="kpi-grid">
+      <div class="card kpi-tile"><span class="v mono" style="color:var(--yes-strong);">${money(totals.deposit)}</span><span class="k">ยอดฝากรวม</span></div>
+      <div class="card kpi-tile"><span class="v mono" style="color:var(--no-strong);">${money(totals.withdraw)}</span><span class="k">ยอดถอนรวม</span></div>
+      <div class="card kpi-tile"><span class="v mono" style="color:var(--accent-strong);">${money(totals.trade_fee)}</span><span class="k">ค่าธรรมเนียมที่เก็บได้</span></div>
+      <div class="card kpi-tile"><span class="v mono">${money(totals.payout)}</span><span class="k">ยอดจ่ายผลตอบแทนแล้ว</span></div>
+    </div>
+    <div class="chips">
+      ${['all','deposit','withdraw','trade_fee','payout'].map(t=>`<a class="chip ${filter===t?'active':''}" href="admin-transactions.html${t==='all'?'':'?type='+t}">${t==='all'?'ทั้งหมด':typeLabel[t]}</a>`).join('')}
+    </div>
+    <div class="card table-wrap"><table>
+      <tr><th>ผู้เล่น</th><th>ประเภท</th><th>จำนวนเงิน</th><th>เมื่อไหร่</th></tr>
+      ${rows.map(t=>`<tr>
+        <td><a href="profile.html?id=${t.player==='You'?'me':t.player.toLowerCase()}">${esc(t.player)}</a></td>
+        <td><span class="badge ${typeBadge[t.type]}">${typeLabel[t.type]}</span></td>
+        <td class="mono">${t.type==='withdraw'?'-':'+'}${money(t.amount)}</td>
+        <td class="sub">${t.time}</td>
+      </tr>`).join('')}
+    </table></div>
+  `;
+}
+draw();
+
+</script>
+</body>
+</html>

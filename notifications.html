@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — การแจ้งเตือน</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+if(!requireLogin()) throw new Error('ต้องเข้าสู่ระบบก่อนจึงจะดูการแจ้งเตือนได้');
+
+let notifications = loadNotifications();
+let balance = loadBalance();
+const wasUnread = notifications.map(n=>!n.read); // captured before marking read below, so this view still shows what was new when you opened it
+document.getElementById('root').innerHTML = traderShell(null, Session.current(), balance, false);
+document.getElementById('view').innerHTML = `
+  <div class="view-header"><h1>การแจ้งเตือน</h1></div>
+  <div class="card" style="padding:4px 16px;max-width:640px;">
+    ${notifications.length ? notifications.map((n,i)=>`<div class="notif-item"><div class="notif-dot" style="background:${wasUnread[i]?'var(--accent)':'var(--border-strong)'}"></div><div style="flex:1;">${esc(n.text)}<div class="sub" style="margin-top:2px;">${n.time}</div></div></div>`).join('') : emptyState('🔔','ยังไม่มีการแจ้งเตือน','')}
+  </div>
+`;
+notifications.forEach(n=>n.read=true);
+saveNotifications(notifications);
+wireSearch();
+
+</script>
+</body>
+</html>

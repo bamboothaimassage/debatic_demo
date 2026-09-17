@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — จัดการสมาชิก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let players = loadPlayers();
+let expandedAdjust = null;
+document.getElementById('root').innerHTML = adminShell('admin-players.html', ADMIN_ACCOUNT);
+
+function addPlayer(){
+  const name = document.getElementById('npName').value.trim();
+  if(!name){ toast('กรุณาตั้งชื่อผู้เล่น', true); return; }
+  const startBal = Number(document.getElementById('npBal').value)||0;
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'') || ('p'+Math.random().toString(36).slice(2,6));
+  players.unshift({ id, name, handle:'@'+id, balance:startBal, volume:0, pnl:0, winRate:0, status:'active', joined:'เพิ่งเข้าร่วม' });
+  document.getElementById('npName').value=''; document.getElementById('npBal').value='';
+  toast('สร้างผู้เล่นแล้ว: '+name);
+  savePlayers(players);
+  draw();
+}
+function toggleStatus(id){
+  const p = players.find(x=>x.id===id);
+  p.status = p.status==='active' ? 'suspended' : 'active';
+  toast((p.status==='active'?'เปิดใช้งานอีกครั้ง: ':'ระงับการใช้งาน: ')+p.name);
+  savePlayers(players);
+  draw();
+}
+function toggleAdjust(id){ expandedAdjust = expandedAdjust===id ? null : id; draw(); }
+function adjustBalance(id, dir){
+  const p = players.find(x=>x.id===id);
+  const amt = Number(document.getElementById('adjAmt_'+id).value);
+  if(!amt || amt<=0){ toast('กรุณาระบุจำนวนเงิน', true); return; }
+  p.balance += dir*amt;
+  if(id==='kim') saveBalance(p.balance); // this row IS the demo login — keep the real wallet in sync
+  toast((dir>0?'เครดิต ':'เดบิต ')+money(amt)+' '+(dir>0?'ให้ ':'จาก ')+p.name);
+  expandedAdjust = null;
+  savePlayers(players);
+  draw();
+}
+function draw(){
+  const q = (qs('q')||'').toLowerCase();
+  const list = q ? players.filter(p=>p.name.toLowerCase().includes(q)||p.handle.toLowerCase().includes(q)) : players;
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>จัดการสมาชิก</h1><div class="sub">${players.length} บัญชี · ใช้งานอยู่ ${players.filter(p=>p.status==='active').length} คน</div></div>
+    <div class="page-note">การสร้าง ปรับยอด หรือระงับผู้เล่นที่นี่เป็นเพียงการอัปเดตรายการในหน่วยความจำของหน้านี้เท่านั้น — นักพัฒนาฝั่งหลังบ้านของคุณจะเชื่อมการทำงานเหล่านี้เข้ากับข้อมูลบัญชีจริง</div>
+    <div class="inline-form">
+      <input id="npName" type="text" placeholder="ชื่อผู้เล่น">
+      <input id="npBal" type="number" placeholder="ยอดคงเหลือเริ่มต้น" min="0">
+      <button class="btn btn-primary" onclick="addPlayer()">+ สร้างผู้เล่น</button>
+    </div>
+    <div class="field" style="max-width:280px;"><input type="text" placeholder="ค้นหาผู้เล่น…" value="${esc(q)}" oninput="location.href='admin-players.html'+(this.value?'?q='+encodeURIComponent(this.value):'')"></div>
+    <div class="card table-wrap"><table>
+      <tr><th>ผู้เล่น</th><th>ยอดคงเหลือ</th><th>ปริมาณ</th><th>กำไร/ขาดทุน</th><th>สถานะ</th><th></th></tr>
+      ${list.map(p=>`<tr>
+        <td><div class="lb-user"><div class="avatar" style="background:${userColor(p.name)}">${initials(p.name)}</div><div><a href="profile.html?id=${p.id}">${esc(p.name)}</a><div class="sub" style="font-size:11.5px;">เข้าร่วมเมื่อ ${p.joined}</div></div></div></td>
+        <td class="mono">${money(p.balance)}</td>
+        <td class="mono">${money(p.volume)}</td>
+        <td class="mono ${p.pnl>=0?'pnl-pos':'pnl-neg'}">${p.pnl>=0?'+':''}${money(p.pnl)}</td>
+        <td><span class="status-dot status-${p.status}"></span>${p.status==='active'?'ใช้งานอยู่':'ระงับการใช้งาน'}</td>
+        <td><div style="display:flex;gap:6px;">
+          <button class="btn btn-sm btn-outline" onclick="toggleAdjust('${p.id}')">${expandedAdjust===p.id?'ยกเลิก':'ปรับยอด'}</button>
+          <button class="btn btn-sm ${p.status==='active'?'btn-no':'btn-yes'}" onclick="toggleStatus('${p.id}')">${p.status==='active'?'ระงับ':'เปิดใช้งานอีกครั้ง'}</button>
+        </div></td>
+      </tr>
+      ${expandedAdjust===p.id ? `<tr class="row-expand"><td colspan="6"><div class="sell-row-form">
+          <span class="sub">ปรับยอดคงเหลือของ ${esc(p.name)} จำนวน</span>
+          <input type="number" id="adjAmt_${p.id}" placeholder="จำนวนเงิน" min="0" step="1">
+          <button class="btn btn-sm btn-yes" onclick="adjustBalance('${p.id}',1)">เครดิต +</button>
+          <button class="btn btn-sm btn-no" onclick="adjustBalance('${p.id}',-1)">เดบิต −</button>
+        </div></td></tr>` : ''}`).join('')}
+    </table></div>
+  `;
+}
+draw();
+
+</script>
+</body>
+</html>

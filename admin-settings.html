@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — ตั้งค่าระบบ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let settings = loadSettings();
+let categories = [...CATEGORIES];
+let confirmingReset = false;
+let heroAds = loadHeroAds();
+let footerLinks = loadFooterLinks();
+let footerSocial = loadFooterSocial();
+document.getElementById('root').innerHTML = adminShell('admin-settings.html', ADMIN_ACCOUNT);
+
+function save(){
+  if(!canAccessFullSettings(loadPreviewRole())){ toast('บทบาทนี้ไม่มีสิทธิ์แก้ไขการตั้งค่านี้', true); return; }
+  settings.siteName = document.getElementById('stSite').value.trim() || settings.siteName;
+  settings.supportEmail = document.getElementById('stEmail').value.trim() || settings.supportEmail;
+  settings.feePct = Number(document.getElementById('stFee').value) || 0;
+  settings.sellFeePct = Number(document.getElementById('stSellFee').value) || 0;
+  settings.minDeposit = Number(document.getElementById('stMinDep').value) || 0;
+  settings.minBet = Number(document.getElementById('stMinBet').value) || 0;
+  settings.referralReferrerPct = Number(document.getElementById('stRefReferrer').value) || 0;
+  settings.referralFriendPct = Number(document.getElementById('stRefFriend').value) || 0;
+  settings.newUserBonusPct = Number(document.getElementById('stNewUserBonus').value) || 0;
+  saveSettings(settings);
+  toast('บันทึกการตั้งค่าแพลตฟอร์มแล้ว — ค่าธรรมเนียมใหม่มีผลกับการซื้อขายทันที');
+}
+function toggleMaintenance(){
+  if(!canAccessFullSettings(loadPreviewRole())){ toast('บทบาทนี้ไม่มีสิทธิ์แก้ไขการตั้งค่านี้', true); return; }
+  settings.maintenanceMode = !settings.maintenanceMode;
+  draw();
+  toast(settings.maintenanceMode ? 'เปิดโหมดปิดปรับปรุงแล้ว — ผู้เทรดจะเห็นหน้าพักระบบ' : 'ปิดโหมดปิดปรับปรุงแล้ว');
+}
+function addCategory(){
+  const v = document.getElementById('newCat').value.trim();
+  if(!v){ toast('กรุณาตั้งชื่อหมวดหมู่', true); return; }
+  if(categories.includes(v)){ toast('มีหมวดหมู่นี้อยู่แล้ว', true); return; }
+  categories.push(v);
+  document.getElementById('newCat').value = '';
+  toast('เพิ่มหมวดหมู่แล้ว: '+v);
+  draw();
+}
+function removeCategory(c){
+  categories = categories.filter(x=>x!==c);
+  toast('ลบหมวดหมู่แล้ว: '+c);
+  draw();
+}
+function uploadHeroAd(idx, input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    heroAds[idx].img = reader.result;
+    saveHeroAds(heroAds);
+    toast('อัปเดตรูปโฆษณาช่องที่ '+(idx+1)+' แล้ว');
+    draw();
+  };
+  reader.readAsDataURL(file);
+}
+function updateHeroAdLabel(idx, val){ heroAds[idx].label = val; saveHeroAds(heroAds); }
+function resetHeroAd(idx){
+  heroAds[idx] = seedHeroAds()[idx];
+  saveHeroAds(heroAds);
+  toast('รีเซ็ตรูปโฆษณาช่องที่ '+(idx+1)+' เป็นค่าเริ่มต้นแล้ว');
+  draw();
+}
+function addFooterLink(){
+  const label = document.getElementById('newFooterLinkLabel').value.trim();
+  const url = document.getElementById('newFooterLinkUrl').value.trim();
+  if(!label || !url){ toast('กรอกชื่อลิงก์และ URL ให้ครบ', true); return; }
+  footerLinks.push({ label, url });
+  saveFooterLinks(footerLinks);
+  toast('เพิ่มลิงก์ฟุตเตอร์แล้ว: '+label);
+  draw();
+}
+function updateFooterLink(i, field, val){ footerLinks[i][field] = val; saveFooterLinks(footerLinks); }
+function removeFooterLink(i){
+  const label = footerLinks[i].label;
+  footerLinks.splice(i, 1);
+  saveFooterLinks(footerLinks);
+  toast('ลบลิงก์ฟุตเตอร์แล้ว: '+label);
+  draw();
+}
+function addFooterSocial(){
+  const label = document.getElementById('newFooterSocialLabel').value.trim();
+  const url = document.getElementById('newFooterSocialUrl').value.trim();
+  if(!label || !url){ toast('กรอกชื่อปุ่มและ URL ให้ครบ', true); return; }
+  footerSocial.push({ label, url });
+  saveFooterSocial(footerSocial);
+  toast('เพิ่มปุ่มแล้ว: '+label);
+  draw();
+}
+function updateFooterSocial(i, field, val){ footerSocial[i][field] = val; saveFooterSocial(footerSocial); }
+function removeFooterSocial(i){
+  const label = footerSocial[i].label;
+  footerSocial.splice(i, 1);
+  saveFooterSocial(footerSocial);
+  toast('ลบปุ่มแล้ว: '+label);
+  draw();
+}
+function toggleResetConfirm(){
+  if(!canAccessFullSettings(loadPreviewRole())){ toast('บทบาทนี้ไม่มีสิทธิ์ใช้งานฟังก์ชันนี้', true); return; }
+  confirmingReset = !confirmingReset; draw();
+}
+function doResetDemoData(){
+  if(!canAccessFullSettings(loadPreviewRole())){ toast('บทบาทนี้ไม่มีสิทธิ์ใช้งานฟังก์ชันนี้', true); return; }
+  resetDemoData();
+  toast('รีเซ็ตข้อมูลสาธิตทั้งหมดแล้ว');
+  setTimeout(()=>{ location.href = 'admin-login.html'; }, 500);
+}
+function draw(){
+  const fullAccess = canAccessFullSettings(loadPreviewRole());
+  const generalCard = fullAccess ? `
+      <div class="card" style="flex:1;min-width:320px;padding:22px;">
+        <h3 style="font-size:15px;margin-bottom:14px;">ทั่วไป</h3>
+        <div class="field"><label for="stSite">ชื่อเว็บไซต์</label><input id="stSite" type="text" value="${esc(settings.siteName)}"></div>
+        <div class="field"><label for="stEmail">อีเมลฝ่ายสนับสนุน</label><input id="stEmail" type="email" value="${esc(settings.supportEmail)}"></div>
+        <div style="display:flex;gap:12px;">
+          <div class="field" style="flex:1;"><label for="stFee">ค่าธรรมเนียมแพลตฟอร์ม — ซื้อ (%)</label><input id="stFee" type="number" min="0" max="20" step="0.1" value="${settings.feePct}"></div>
+          <div class="field" style="flex:1;"><label for="stSellFee">ค่าธรรมเนียมแพลตฟอร์ม — ขาย (%)</label><input id="stSellFee" type="number" min="0" max="20" step="0.1" value="${settings.sellFeePct||0}"></div>
+        </div>
+        <div style="display:flex;gap:12px;">
+          <div class="field" style="flex:1;"><label for="stMinDep">ยอดฝากขั้นต่ำ ($)</label><input id="stMinDep" type="number" min="0" value="${settings.minDeposit}"></div>
+          <div class="field" style="flex:1;"><label for="stMinBet">ยอดเดิมพันขั้นต่ำ ($)</label><input id="stMinBet" type="number" min="0" value="${settings.minBet}"></div>
+        </div>
+        <div style="display:flex;gap:12px;">
+          <div class="field" style="flex:1;"><label for="stRefReferrer">รางวัลผู้แนะนำ (% ของยอดฝากครั้งแรกของเพื่อน)</label><input id="stRefReferrer" type="number" min="0" max="100" step="0.5" value="${settings.referralReferrerPct||0}"></div>
+          <div class="field" style="flex:1;"><label for="stRefFriend">โบนัสต้อนรับเพื่อน — สมัครผ่านลิงก์แนะนำ (% ของยอดฝากครั้งแรกของเขาเอง)</label><input id="stRefFriend" type="number" min="0" max="100" step="0.5" value="${settings.referralFriendPct||0}"></div>
+        </div>
+        <p class="sub" style="font-size:11.5px;margin:-4px 0 14px;">จ่ายเมื่อเพื่อนที่แนะนำสมัครผ่านลิงก์และทำการเทรดครั้งแรกสำเร็จ — ดูตัวอย่างการคำนวณและลิงก์แนะนำได้ที่หน้า “แนะนำเพื่อน & รางวัล” ของผู้เล่น</p>
+        <div class="field"><label for="stNewUserBonus">โบนัสต้อนรับสมาชิกใหม่ — สมัครเอง ไม่มีผู้แนะนำ (% ของยอดฝากครั้งแรก)</label><input id="stNewUserBonus" type="number" min="0" max="100" step="0.5" value="${settings.newUserBonusPct||0}"></div>
+        <p class="sub" style="font-size:11.5px;margin:-4px 0 14px;">โปรโมชันที่สองสำหรับสมาชิกที่สมัครตรงโดยไม่ผ่านใครแนะนำ — ตั้งค่าให้ต่ำกว่าโบนัสต้อนรับเพื่อนด้านบน เพื่อจูงใจให้คนแนะนำกันมากขึ้น</p>
+        <button class="btn btn-primary" onclick="save()">บันทึกการตั้งค่า</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:22px;padding-top:18px;border-top:1px solid var(--border);">
+          <div><b style="font-size:13.75px;">โหมดปิดปรับปรุง</b><div class="sub" style="font-size:12px;">แสดงหน้าพักระบบให้ผู้เทรดเห็นระหว่างที่คุณทำการเปลี่ยนแปลง</div></div>
+          <button class="toggle-switch ${settings.maintenanceMode?'on':''}" onclick="toggleMaintenance()"><span class="knob"></span></button>
+        </div>
+      </div>
+  ` : `
+      <div class="card" style="flex:1;min-width:320px;padding:22px;">
+        ${adminAccessDeniedHtml('ทั่วไป (ค่าธรรมเนียม โบนัส ยอดขั้นต่ำ โหมดปิดปรับปรุง)')}
+      </div>
+  `;
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>ตั้งค่าระบบ</h1></div>
+    <div class="page-note">การตั้งค่าที่นี่บันทึกไว้ในเบราว์เซอร์นี้และมีผลจริงกับฝั่งผู้เล่นทันที (ค่าธรรมเนียมซื้อจะถูกหักตอนซื้อหุ้น และค่าธรรมเนียมขายจะถูกหักตอนขายหุ้น ในทุกตลาด) — แต่ยังไม่ใช่ฐานข้อมูลจริง ทีมพัฒนาฝั่งหลังบ้านของคุณจะเชื่อมส่วนนี้เข้ากับ API จริงภายหลัง</div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;">
+      ${generalCard}
+      <div class="card" style="flex:1;min-width:320px;padding:22px;">
+        <h3 style="font-size:15px;margin-bottom:14px;">หมวดหมู่</h3>
+        <div class="inline-form" style="margin-bottom:14px;">
+          <input id="newCat" type="text" placeholder="ชื่อหมวดหมู่ใหม่">
+          <button class="btn btn-primary btn-sm" onclick="addCategory()">+ เพิ่ม</button>
+        </div>
+        ${categories.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 4px;border-top:1px solid var(--border);">
+          <span>${esc(catTh(c))}</span><button class="btn btn-sm btn-ghost" onclick="removeCategory('${c}')">ลบออก</button>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="card" style="margin-top:24px;padding:22px;">
+      <h3 style="font-size:15px;margin-bottom:6px;">โฆษณา (หน้าตลาดทั้งหมด)</h3>
+      <p class="sub" style="margin-bottom:14px;">รูปโฆษณา 2 ช่องที่แสดงมุมขวาบนของหน้าตลาดทั้งหมด (เห็นเมื่อยังไม่ได้กรองหมวดหมู่หรือช่วงเวลา) — ตอนนี้เป็นภาพตัวอย่างสำหรับสาธิตเท่านั้น ทีมพัฒนาฝั่งหลังบ้านของคุณจะเชื่อมส่วนนี้เข้ากับระบบโฆษณาจริงภายหลัง</p>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;">
+        ${heroAds.map((a,i)=>`
+        <div style="flex:1;min-width:240px;">
+          <div style="aspect-ratio:16/6;border-radius:var(--radius-m);border:1px solid var(--border);background-image:url('${a.img}');background-size:cover;background-position:center;margin-bottom:10px;"></div>
+          <div class="field"><label for="adLabel${i}">ป้ายกำกับ (ใช้ภายในเท่านั้น)</label><input id="adLabel${i}" type="text" value="${esc(a.label||'')}" onchange="updateHeroAdLabel(${i}, this.value)"></div>
+          <div style="display:flex;gap:8px;">
+            <label class="btn btn-sm btn-outline" style="cursor:pointer;margin-bottom:0;">อัปโหลดรูปใหม่<input type="file" accept="image/*" style="display:none;" onchange="uploadHeroAd(${i}, this)"></label>
+            <button class="btn btn-sm btn-ghost" onclick="resetHeroAd(${i})">ใช้ค่าเริ่มต้น</button>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="card" style="margin-top:24px;padding:22px;">
+      <h3 style="font-size:15px;margin-bottom:6px;">ฟุตเตอร์เว็บไซต์</h3>
+      <p class="sub" style="margin-bottom:14px;">ลิงก์และปุ่มที่แสดงในฟุตเตอร์ด้านล่างของทุกหน้าฝั่งผู้เทรด — เพิ่ม แก้ไข หรือลบได้ตามต้องการ การเปลี่ยนแปลงมีผลทันที</p>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:280px;">
+          <h4 style="font-size:12.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:10px;">ลิงก์ทั่วไป</h4>
+          ${footerLinks.map((l,i)=>`
+          <div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--border);">
+            <input type="text" value="${esc(l.label)}" placeholder="ชื่อลิงก์" style="flex:1;min-width:0;" onchange="updateFooterLink(${i},'label',this.value)">
+            <input type="text" value="${esc(l.url)}" placeholder="URL" style="flex:1;min-width:0;" onchange="updateFooterLink(${i},'url',this.value)">
+            <button class="btn btn-sm btn-ghost" onclick="removeFooterLink(${i})">ลบ</button>
+          </div>`).join('')}
+          <div class="inline-form" style="margin-top:12px;margin-bottom:0;">
+            <input id="newFooterLinkLabel" type="text" placeholder="ชื่อลิงก์ใหม่">
+            <input id="newFooterLinkUrl" type="text" placeholder="URL">
+            <button class="btn btn-primary btn-sm" onclick="addFooterLink()">+ เพิ่ม</button>
+          </div>
+        </div>
+        <div style="flex:1;min-width:280px;">
+          <h4 style="font-size:12.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:10px;">ปุ่มฝ่ายสนับสนุน & โซเชียล</h4>
+          ${footerSocial.map((l,i)=>`
+          <div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--border);">
+            <input type="text" value="${esc(l.label)}" placeholder="ชื่อปุ่ม" style="flex:1;min-width:0;" onchange="updateFooterSocial(${i},'label',this.value)">
+            <input type="text" value="${esc(l.url)}" placeholder="URL" style="flex:1;min-width:0;" onchange="updateFooterSocial(${i},'url',this.value)">
+            <button class="btn btn-sm btn-ghost" onclick="removeFooterSocial(${i})">ลบ</button>
+          </div>`).join('')}
+          <div class="inline-form" style="margin-top:12px;margin-bottom:0;">
+            <input id="newFooterSocialLabel" type="text" placeholder="ชื่อปุ่มใหม่">
+            <input id="newFooterSocialUrl" type="text" placeholder="URL">
+            <button class="btn btn-primary btn-sm" onclick="addFooterSocial()">+ เพิ่ม</button>
+          </div>
+        </div>
+      </div>
+      <p class="sub" style="font-size:11.5px;margin:14px 0 0;">ข้อความข้อกำหนดทางกฎหมายที่ด้านล่างสุดของฟุตเตอร์ (ตัวอย่างสาธิต) แก้ไขได้ที่ไฟล์ระบบโดยทีมพัฒนา — ลิงก์ในข้อความเชื่อมไปยังหน้า “ข้อกำหนดการใช้งาน” และ “นโยบายความเป็นส่วนตัว” ของคุณ</p>
+    </div>
+    <div class="card" style="margin-top:24px;padding:22px;max-width:680px;">
+      <h3 style="font-size:15px;margin-bottom:6px;">ข้อมูลสาธิต</h3>
+      ${fullAccess ? `
+      <p class="sub" style="margin-bottom:14px;">ล้างยอดคงเหลือ โพซิชัน ราคาตลาด รายชื่อผู้เล่น คำแนะนำที่รออนุมัติ และประวัติทั้งหมดที่บันทึกไว้ในเบราว์เซอร์นี้ กลับไปเป็นข้อมูลตั้งต้น — ใช้ก่อนเริ่มสาธิตรอบใหม่ให้นักลงทุนดู</p>
+      ${confirmingReset ? `
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span class="sub" style="font-weight:600;color:var(--no-strong);">แน่ใจหรือไม่? การกระทำนี้ล้างข้อมูลสาธิตทั้งหมดและไม่สามารถย้อนกลับได้</span>
+          <button class="btn btn-sm btn-no" onclick="doResetDemoData()">ยืนยันรีเซ็ต</button>
+          <button class="btn btn-sm btn-ghost" onclick="toggleResetConfirm()">ยกเลิก</button>
+        </div>
+      ` : `<button class="btn btn-outline" onclick="toggleResetConfirm()">รีเซ็ตข้อมูลสาธิตทั้งหมด</button>`}
+      ` : adminAccessDeniedHtml('ข้อมูลสาธิต')}
+    </div>
+  `;
+}
+draw();
+
+</script>
+</body>
+</html>

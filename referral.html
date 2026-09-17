@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — แนะนำเพื่อน & รางวัล</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+if(!requireLogin()) throw new Error('ต้องเข้าสู่ระบบก่อนจึงจะดูหน้าแนะนำเพื่อนได้');
+
+let notifications = loadNotifications();
+let balance = loadBalance();
+let referrals = loadReferrals();
+let settings = loadSettings();
+document.getElementById('root').innerHTML = traderShell(null, Session.current(), balance, notifications.some(n=>!n.read));
+
+const referralLink = location.origin + location.pathname.replace(/[^/]*$/, '') + 'login.html?ref=' + referralCode(Session.current());
+
+function copyLink(){
+  const input = document.getElementById('refLinkInput');
+  input.select();
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(referralLink).then(()=>toast('คัดลอกลิงก์แล้ว')).catch(()=>toast('คัดลอกไม่สำเร็จ ลองคัดลอกด้วยตนเอง', true));
+  } else {
+    try{ document.execCommand('copy'); toast('คัดลอกลิงก์แล้ว'); }catch(e){ toast('คัดลอกไม่สำเร็จ ลองคัดลอกด้วยตนเอง', true); }
+  }
+}
+function simulateReferral(){
+  const amt = Number(document.getElementById('simAmt').value);
+  if(!amt || amt<=0){ toast('กรุณาระบุยอดฝากครั้งแรกของเพื่อนที่จะจำลอง', true); return; }
+  const seed = hashStr('sim-'+Date.now()+'-'+Math.random());
+  const name = FAKE_HOLDER_NAMES[seed % FAKE_HOLDER_NAMES.length] + (seed%89);
+  referrals.unshift({ id:'ref'+Date.now(), name, joined:'เมื่อสักครู่', qualified:true, firstDeposit:amt });
+  saveReferrals(referrals);
+  document.getElementById('simAmt').value = '';
+  toast('จำลองเพื่อนใหม่ “'+name+'” สมัคร ฝากเงิน '+money(amt)+' และเทรดครั้งแรกแล้ว');
+  draw();
+}
+function draw(){
+  const stats = referralStats(referrals, settings.referralReferrerPct);
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>แนะนำเพื่อน & รางวัล</h1><div class="sub">ชวนเพื่อนมาเทรดบน Debatic แล้วรับส่วนแบ่งจากยอดฝากครั้งแรกของเขา</div></div>
+    <div class="page-note">ระบบทดลองนี้มีบัญชีเดียว จึงยังไม่สามารถให้เพื่อนจริงสมัครผ่านลิงก์นี้ได้ — รายชื่อและปุ่ม “จำลองเพื่อนใหม่” ด้านล่างเป็นข้อมูลจำลองเพื่อสาธิตกลไกการคำนวณรางวัลเท่านั้น (ปรับเปอร์เซ็นต์ได้จากหน้าตั้งค่าระบบฝั่งแอดมิน) ทีมพัฒนาฝั่งหลังบ้านของคุณจะเชื่อมกับระบบสมัครสมาชิกจริงภายหลัง</div>
+
+    <div class="card" style="max-width:640px;padding:22px;margin-bottom:22px;">
+      <div class="field"><label for="refLinkInput">ลิงก์แนะนำของคุณ</label>
+        <div style="display:flex;gap:8px;">
+          <input id="refLinkInput" type="text" value="${referralLink}" readonly>
+          <button class="btn btn-outline" onclick="copyLink()">คัดลอก</button>
+        </div>
+      </div>
+      <div class="sub" style="font-size:12.5px;">คุณได้รับ <b>${settings.referralReferrerPct}%</b> ของยอดฝากครั้งแรกของเพื่อนที่แนะนำสำเร็จ (สมัคร + เทรดครั้งแรก) และเพื่อนของคุณได้รับโบนัสต้อนรับ <b>${settings.referralFriendPct}%</b> ของยอดฝากครั้งแรกของเขาเองด้วย</div>
+    </div>
+
+    <div class="stat-row" style="border:none;padding-top:0;">
+      <div class="stat"><span class="v mono">${stats.count}</span><span class="k">เพื่อนที่แนะนำสำเร็จ</span></div>
+      <div class="stat"><span class="v mono pnl-pos">+${money(stats.totalReward)}</span><span class="k">รางวัลรวมที่ได้รับ</span></div>
+    </div>
+
+    <h3 style="font-size:15px;margin:22px 0 8px;">รายชื่อเพื่อนที่แนะนำ</h3>
+    <div class="card table-wrap"><table>
+      <tr><th>ชื่อ</th><th>วันที่สมัคร</th><th>สถานะ</th><th>ยอดฝากครั้งแรก</th><th>รางวัลที่คุณได้รับ</th></tr>
+      ${referrals.map(r=>`<tr>
+        <td>${esc(r.name)}</td>
+        <td class="sub">${esc(r.joined)}</td>
+        <td>${r.qualified ? '<span class="badge badge-accent">ผ่านเงื่อนไขแล้ว</span>' : '<span class="badge">รอเทรดครั้งแรก</span>'}</td>
+        <td class="mono">${money(r.firstDeposit)}</td>
+        <td class="mono">${r.qualified ? money(r.firstDeposit*settings.referralReferrerPct/100) : '—'}</td>
+      </tr>`).join('')}
+    </table></div>
+
+    <div class="card" style="max-width:420px;padding:20px;margin-top:22px;">
+      <h3 style="font-size:14px;margin-bottom:10px;">จำลองเพื่อนใหม่ (สำหรับสาธิต)</h3>
+      <div class="field"><label for="simAmt">ยอดฝากครั้งแรกของเพื่อน ($)</label><input id="simAmt" type="number" min="1" placeholder="เช่น 200"></div>
+      <button class="btn btn-primary btn-sm" onclick="simulateReferral()">+ จำลองเพื่อนแนะนำสำเร็จ</button>
+    </div>
+  `;
+}
+draw();
+wireSearch();
+
+</script>
+</body>
+</html>

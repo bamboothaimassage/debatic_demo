@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — แดชบอร์ดผู้ดูแล</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let markets = loadMarkets();
+let players = loadPlayers();
+let adminLog = seedAdminLog();
+document.getElementById('root').innerHTML = adminShell('admin-dashboard.html', ADMIN_ACCOUNT);
+
+const totalVolume = markets.reduce((s,m)=>s+m.volume,0);
+const feeRate = 0.02;
+const revenue = totalVolume*feeRate;
+const openCount = markets.filter(m=>m.status==='open').length;
+const resolvedCount = markets.filter(m=>m.status==='resolved').length;
+const activeUsers = players.filter(p=>p.status==='active').length;
+
+// Real cross-page "needs your attention" counts — separate from the "top open markets" table
+// below (which is just a ranking, not a to-do list). Finance is only surfaced to roles that
+// can actually act on it, so this never links a role to a page it will immediately bounce
+// off of via guardAdminRole.
+const previewRole = loadPreviewRole();
+const pendingMarketSuggestions = loadPendingSuggestions().length;
+const pendingFinanceRequests = canAccessFinance(previewRole) ? loadFinanceRequests().filter(r=>r.status==='pending').length : 0;
+
+// synthetic 14-day revenue trend for the chart, ending at today's figure
+const trendPts = (function(){ const pts=[]; let v = revenue*0.55; for(let i=0;i<13;i++){ v += (revenue-v)*0.2 + (Math.random()*revenue*0.03-revenue*0.015); pts.push({t:i, yes: Math.max(2, Math.min(98, (v/revenue)*70))}); } pts.push({t:13, yes:70}); return pts; })();
+
+function statCard(icon, iconBg, value, label, barColor){
+  return `<div class="card stat-card">
+    <div class="stat-top">
+      <div class="ic-circle" style="background:${iconBg};">${icon}</div>
+      <span class="stat-chev">›</span>
+    </div>
+    <div>
+      <div class="stat-v mono">${value}</div>
+      <div class="stat-k">${label}</div>
+      <div class="stat-date">อัปเดตวันนี้</div>
+    </div>
+    <div class="stat-bar" style="background:${barColor};"></div>
+  </div>`;
+}
+
+document.getElementById('view').innerHTML = `
+  <div class="view-header"><h1>แดชบอร์ดผู้ดูแล</h1><div class="sub">ภาพรวมของทุกตลาดและผู้เล่นทั้งหมด</div></div>
+  <div class="page-note">หน้านี้สำหรับเจ้าของแพลตฟอร์มเท่านั้น ตัวเลขด้านล่างคำนวณสดจากข้อมูลตลาดและผู้เล่นในหน่วยความจำของระบบทดลองนี้ — สมมติค่าธรรมเนียมแพลตฟอร์ม 2% ของปริมาณการเทรดทั้งหมดสำหรับยอดกำไร นักพัฒนาระบบหลังบ้านของคุณจะเปลี่ยนตัวเลขนี้เป็นข้อมูลบัญชีจริง</div>
+  ${(pendingMarketSuggestions || pendingFinanceRequests) ? `
+  <div class="card" style="display:flex;gap:10px 24px;flex-wrap:wrap;align-items:center;padding:14px 18px;margin-bottom:20px;background:var(--warn-soft);border-color:transparent;">
+    <b style="font-size:13px;color:var(--warn);">ต้องดำเนินการ:</b>
+    ${pendingMarketSuggestions ? `<a href="admin-markets.html" style="color:var(--warn);font-weight:600;font-size:13.5px;">กระทู้ที่รอตรวจสอบ ${pendingMarketSuggestions} รายการ →</a>` : ''}
+    ${pendingFinanceRequests ? `<a href="admin-transactions.html" style="color:var(--warn);font-weight:600;font-size:13.5px;">คำขอฝาก/ถอนที่รออนุมัติ ${pendingFinanceRequests} รายการ →</a>` : ''}
+  </div>` : ''}
+  <div class="stat-grid">
+    ${statCard('฿', 'var(--accent-soft)', money(totalVolume), 'ปริมาณการเทรดทั้งหมด', 'var(--accent)')}
+    ${statCard('%', 'var(--yes-soft)', money(revenue), 'รายได้แพลตฟอร์ม (ค่าธรรมเนียม 2%)', 'var(--yes)')}
+    ${statCard('◔', 'var(--accent-soft)', players.length+' คน', 'ผู้เล่นทั้งหมด · ใช้งานอยู่ '+activeUsers+' คน', 'var(--accent)')}
+    ${statCard('◧', 'var(--warn-soft)', openCount+' เปิด / '+resolvedCount+' ปิด', 'ตลาดทั้งหมด', 'var(--warn)')}
+  </div>
+  <h3 style="font-size:16px;margin-bottom:8px;">แนวโน้มรายได้ (14 วันล่าสุด, จำลอง)</h3>
+  <div class="card" style="padding:14px 14px 4px;margin-bottom:26px;">${priceChart(trendPts)}</div>
+  <div style="display:flex;gap:24px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:280px;">
+      <h3 style="font-size:16px;margin-bottom:8px;">ตลาดเปิดอยู่ตามปริมาณสูงสุด</h3>
+      <div class="card table-wrap"><table><tr><th>ตลาด</th><th>หมวดหมู่</th><th>ปริมาณ</th><th>ปิดรับ</th></tr>
+        ${markets.filter(m=>m.status==='open').sort((a,b)=>b.volume-a.volume).slice(0,5).map(m=>`<tr><td><a href="admin-markets.html">${esc(m.question)}</a></td><td>${catTh(m.category)}</td><td class="mono">${money(m.volume)}</td><td class="sub">${m.closes}</td></tr>`).join('')}
+      </table></div>
+    </div>
+    <div style="flex:1;min-width:280px;">
+      <h3 style="font-size:16px;margin-bottom:8px;">กิจกรรมผู้ดูแลล่าสุด</h3>
+      <div class="card" style="padding:4px 14px;">${adminLog.slice(0,5).map(l=>`<div class="activity-item"><div class="act-ic sys">✓</div><div class="act-body">${esc(l.text)}</div><div class="act-time">${l.time}</div></div>`).join('')}</div>
+      <a class="btn btn-sm" style="margin-top:10px;" href="admin-activity.html">ดูประวัติทั้งหมด →</a>
+    </div>
+  </div>
+`;
+
+</script>
+</body>
+</html>

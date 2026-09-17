@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — เข้าสู่ระบบ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let authTab = 'login';
+function renderAuth(){
+  document.getElementById('root').innerHTML = `
+    <div class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-brand"><div class="mark" style="background:var(--accent);color:#fff;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;">D</div><div style="font-family:var(--font-display);font-weight:600;font-size:21px;">Debatic</div></div>
+        <div class="auth-tabs">
+          <button class="${authTab==='login'?'active':''}" onclick="authTab='login'; renderAuth();">เข้าสู่ระบบ</button>
+          <button class="${authTab==='signup'?'active':''}" onclick="authTab='signup'; renderAuth();">สมัครสมาชิก</button>
+        </div>
+        <div id="authError" class="auth-error" hidden></div>
+        ${authTab==='login' ? `
+          <div class="field"><label for="loginUser">ชื่อผู้ใช้</label><input id="loginUser" type="text" placeholder="demo" value="demo"></div>
+          <div class="field"><label for="loginPass">รหัสผ่าน</label><input id="loginPass" type="password" placeholder="demo1234" value="demo1234"></div>
+          <button class="btn btn-primary btn-block" onclick="attemptLogin()">เข้าสู่ระบบ</button>
+          <div class="auth-hint">บัญชีทดลอง: <span class="mono">demo / demo1234</span></div>
+        ` : `
+          <div class="field"><label for="suName">ชื่อ</label><input id="suName" type="text" placeholder="ชื่อของคุณ"></div>
+          <div class="field"><label for="suEmail">อีเมล</label><input id="suEmail" type="email" placeholder="you@example.com"></div>
+          <button class="btn btn-primary btn-block" onclick="Session.login(DEMO_ACCOUNT); location.href=qs('next')||'index.html';">สร้างบัญชี</button>
+          <div class="auth-hint">นี่คือระบบทดลอง — การสมัครจะพาคุณเข้าสู่บัญชีทดลองเดียวกัน</div>
+        `}
+        <div style="display:flex;align-items:center;gap:10px;margin:18px 0 14px;">
+          <div style="flex:1;height:1px;background:var(--border);"></div>
+          <span class="sub" style="font-size:12px;">หรือ</span>
+          <div style="flex:1;height:1px;background:var(--border);"></div>
+        </div>
+        <button class="btn-google" onclick="mockGoogleLogin(this)">
+          <svg width="18" height="18" viewBox="0 0 18 18" style="flex-shrink:0;">
+            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.28-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z"/>
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
+          </svg>
+          เข้าสู่ระบบด้วย Google
+        </button>
+        <p class="hint" style="margin-top:10px;font-size:11px;text-align:center;">* ปุ่มนี้จำลองการเข้าสู่ระบบด้วย Google สำหรับสาธิตเท่านั้น ยังไม่ได้เชื่อมต่อ Google OAuth จริง</p>
+      </div>
+    </div>
+  `;
+}
+function mockGoogleLogin(btn){
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = 'กำลังเข้าสู่ระบบด้วย Google…';
+  setTimeout(()=>{
+    Session.login(DEMO_ACCOUNT);
+    location.href = qs('next') || 'index.html';
+  }, 700);
+}
+function attemptLogin(){
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('authError');
+  if(user===DEMO_ACCOUNT.username && pass===DEMO_ACCOUNT.password){
+    Session.login(DEMO_ACCOUNT);
+    const next = qs('next');
+    location.href = next || 'index.html';
+  } else {
+    errEl.hidden = false;
+    errEl.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง ลองใช้ demo / demo1234';
+  }
+}
+renderAuth();
+
+</script>
+</body>
+</html>

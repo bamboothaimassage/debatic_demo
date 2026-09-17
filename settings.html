@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — ตั้งค่า</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+if(!requireLogin()) throw new Error('ต้องเข้าสู่ระบบก่อนจึงจะแก้ไขการตั้งค่าได้');
+
+const THAI_BANKS = ['ธนาคารกรุงเทพ','ธนาคารกสิกรไทย','ธนาคารกรุงไทย','ธนาคารไทยพาณิชย์','ธนาคารกรุงศรีอยุธยา','ธนาคารทหารไทยธนชาต (ttb)','ธนาคารเกียรตินาคินภัทร','ธนาคารซีไอเอ็มบี ไทย','ธนาคารยูโอบี','ธนาคารออมสิน','ธนาคารอาคารสงเคราะห์ (ธอส.)','ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (ธ.ก.ส.)'];
+
+let notifications = loadNotifications();
+let balance = loadBalance();
+let name = DEMO_ACCOUNT.name, handle = DEMO_ACCOUNT.handle;
+let avatarImage = loadProfileAvatarImage();
+let bank = loadBankAccount();
+
+function renderShell(){
+  document.getElementById('root').innerHTML = traderShell(null, Session.current(), balance, notifications.some(n=>!n.read));
+}
+
+function uploadAvatar(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    avatarImage = reader.result;
+    saveProfileAvatarImage(avatarImage);
+    toast('อัปเดตรูปโปรไฟล์แล้ว');
+    renderShell();
+    draw();
+  };
+  reader.readAsDataURL(file);
+}
+function resetAvatar(){
+  avatarImage = null;
+  saveProfileAvatarImage(null);
+  toast('เปลี่ยนกลับเป็นตัวอักษรเริ่มต้นแล้ว');
+  renderShell();
+  draw();
+}
+function save(){ toast('บันทึกการตั้งค่าแล้ว'); }
+function saveBank(){
+  bank = {
+    bank: document.getElementById('bankName').value,
+    accountNumber: document.getElementById('bankAccNum').value.trim(),
+    accountName: document.getElementById('bankAccName').value.trim(),
+  };
+  saveBankAccount(bank);
+  toast('บันทึกข้อมูลบัญชีธนาคารแล้ว');
+}
+
+function draw(){
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>ตั้งค่าบัญชี</h1></div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;">
+      <div class="card" style="flex:1;min-width:320px;max-width:480px;padding:24px;">
+        <h3 style="font-size:15px;margin-bottom:14px;">รูปโปรไฟล์</h3>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
+          <div class="avatar" style="${avatarStyle(DEMO_ACCOUNT.avatarColor, avatarImage)};width:72px;height:72px;font-size:26px;">${avatarLabel(DEMO_ACCOUNT.avatarLetter, avatarImage)}</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label class="btn btn-sm btn-outline" style="cursor:pointer;margin-bottom:0;">อัปโหลดรูปใหม่<input type="file" accept="image/*" style="display:none;" onchange="uploadAvatar(this)"></label>
+            ${avatarImage ? `<button class="btn btn-sm btn-ghost" onclick="resetAvatar()">ใช้ตัวอักษรเริ่มต้น</button>` : ''}
+          </div>
+        </div>
+        <div class="field"><label for="stName">ชื่อที่แสดง</label><input id="stName" type="text" value="${esc(name)}"></div>
+        <div class="field"><label for="stHandle">ชื่อผู้ใช้</label><input id="stHandle" type="text" value="${esc(handle)}"></div>
+        <div class="field"><label for="stEmail">อีเมล</label><input id="stEmail" type="email" value="demo@debatic.app" disabled></div>
+        <div class="field"><label>การแจ้งเตือน</label>
+          <label style="display:flex;gap:8px;align-items:center;text-transform:none;font-weight:400;color:var(--text);margin-bottom:6px;"><input type="checkbox" checked style="width:auto;"> แจ้งเตือนการเปลี่ยนแปลงราคา</label>
+          <label style="display:flex;gap:8px;align-items:center;text-transform:none;font-weight:400;color:var(--text);"><input type="checkbox" checked style="width:auto;"> แจ้งเตือนการตัดสินผลตลาด</label>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="save()">บันทึกการเปลี่ยนแปลง</button>
+        <p class="hint" style="margin-top:10px;">เดโมนี้มีเพียงบัญชีเดียว จึงไม่สามารถเปลี่ยนอีเมลได้ที่นี่ และการเปลี่ยนแปลงชื่อ/ชื่อผู้ใช้จะรีเซ็ตเมื่อโหลดหน้าใหม่ — รูปโปรไฟล์และข้อมูลบัญชีธนาคารจะถูกบันทึกไว้ในเบราว์เซอร์นี้</p>
+      </div>
+      <div class="card" style="flex:1;min-width:320px;max-width:480px;padding:24px;">
+        <h3 style="font-size:15px;margin-bottom:6px;">บัญชีธนาคาร (สำหรับถอนเงิน)</h3>
+        <p class="sub" style="margin-bottom:14px;">ใช้สำหรับสาธิตเท่านั้น — ยังไม่เชื่อมกับระบบถอนเงินจริง ทีมพัฒนาฝั่งหลังบ้านของคุณจะเชื่อมส่วนนี้เข้ากับระบบชำระเงินจริงภายหลัง</p>
+        <div class="field"><label for="bankName">ธนาคาร</label>
+          <select id="bankName">
+            <option value="">เลือกธนาคาร</option>
+            ${THAI_BANKS.map(b=>`<option value="${esc(b)}" ${bank.bank===b?'selected':''}>${esc(b)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label for="bankAccNum">เลขที่บัญชี</label><input id="bankAccNum" type="text" inputmode="numeric" placeholder="xxx-x-xxxxx-x" value="${esc(bank.accountNumber)}"></div>
+        <div class="field"><label for="bankAccName">ชื่อบัญชี</label><input id="bankAccName" type="text" placeholder="ชื่อ-นามสกุลตามบัญชีธนาคาร" value="${esc(bank.accountName)}"></div>
+        <button class="btn btn-primary btn-block" onclick="saveBank()">บันทึกข้อมูลบัญชีธนาคาร</button>
+      </div>
+    </div>
+  `;
+}
+renderShell();
+draw();
+wireSearch();
+
+</script>
+</body>
+</html>

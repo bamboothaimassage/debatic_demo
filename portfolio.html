@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — พอร์ตของฉัน</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+if(!requireLogin()) throw new Error('ต้องเข้าสู่ระบบก่อนจึงจะดูพอร์ตของคุณได้');
+
+let markets = loadMarkets();
+let notifications = loadNotifications();
+let positions = loadPositions();
+let balance = loadBalance();
+let expandedSell = null;
+document.getElementById('root').innerHTML = traderShell(null, Session.current(), balance, notifications.some(n=>!n.read));
+
+function priceFor(m, side){ return side==='yes' ? m.yesPrice/100 : (100-m.yesPrice)/100; }
+function curVal(p){ const m = markets.find(x=>x.id===p.marketId); return m ? p.shares*priceFor(m,p.side) : 0; }
+
+function toggleSell(key){ expandedSell = expandedSell===key ? null : key; draw(); }
+function sellPosition(marketId, side){
+  const m = markets.find(x=>x.id===marketId);
+  const pos = positions.find(p=>p.marketId===marketId && p.side===side && !p.settled);
+  const qty = Math.min(Number(document.getElementById('sellQty_'+marketId+'_'+side).value)||0, pos.shares);
+  if(qty<=0){ toast('กรุณาระบุจำนวนหุ้นที่ต้องการขาย', true); return; }
+  const quote = ammSellQuote(m, side, qty);
+  const grossProceeds = quote.proceeds;
+  const sellFeePct = loadSettings().sellFeePct || 0;
+  const sellFee = grossProceeds * sellFeePct/100;
+  const proceeds = grossProceeds - sellFee;
+  balance += proceeds;
+  applySidePriceCents(m, side, quote.newSideCents);
+  const fraction = qty/pos.shares;
+  pos.cost -= pos.cost*fraction;
+  pos.shares -= qty;
+  if(pos.shares < 0.0001) positions = positions.filter(p=>p!==pos);
+  m.volume += grossProceeds;
+  m.history.push({t:m.history.length, yes:m.yesPrice});
+  toast(sellFee>0
+    ? ('ขาย '+qty.toFixed(2)+' หุ้นฝั่ง'+(side==='yes'?'ใช่':'ไม่')+' สำเร็จ ได้รับ '+money(proceeds)+' (ค่าธรรมเนียม '+money(sellFee)+')')
+    : ('ขาย '+qty.toFixed(2)+' หุ้นฝั่ง'+(side==='yes'?'ใช่':'ไม่')+' สำเร็จ ได้รับ '+money(proceeds)+''));
+  expandedSell = null;
+  saveBalance(balance); savePositions(positions); saveMarkets(markets);
+  syncBalancePill(balance);
+  draw();
+}
+
+function renderOpen(open){
+  if(!open.length) return emptyState('○','ยังไม่มีโพซิชันที่เปิดอยู่','ไปที่หน้าตลาดเพื่อเริ่มเทรดครั้งแรกของคุณ');
+  const rows = open.map(p=>{
+    const m = markets.find(x=>x.id===p.marketId);
+    const cur = curVal(p), pnl = cur - p.cost;
+    const key = p.marketId+p.side, expanded = expandedSell===key;
+    return `<tr>
+      <td><a href="market-detail.html?id=${m.id}">${esc(m.question)}</a></td>
+      <td><span class="badge ${p.side==='yes'?'badge-yes':'badge-no'}">${p.side==='yes'?'ใช่':'ไม่'}</span></td>
+      <td class="mono">${p.shares.toFixed(2)}</td>
+      <td class="mono">$${p.avgPrice.toFixed(2)}</td>
+      <td class="mono">$${priceFor(m,p.side).toFixed(2)}</td>
+      <td class="mono">${money(cur)}</td>
+      <td class="mono ${pnl>=0?'pnl-pos':'pnl-neg'}">${pnl>=0?'+':''}${money(pnl)}</td>
+      <td><button class="btn btn-sm btn-ghost" onclick="toggleSell('${key}')">${expanded?'ยกเลิก':'ขาย'}</button></td>
+    </tr>
+    ${expanded ? `<tr class="row-expand"><td colspan="8"><div class="sell-row-form">
+        <span class="sub">ต้องการขายกี่หุ้นจากทั้งหมด ${p.shares.toFixed(2)} หุ้น?</span>
+        <input type="number" id="sellQty_${p.marketId}_${p.side}" value="${p.shares.toFixed(2)}" max="${p.shares}" min="0" step="0.01">
+        <button class="btn btn-sm btn-primary" onclick="sellPosition('${p.marketId}','${p.side}')">ยืนยันการขาย</button>
+      </div></td></tr>` : ''}`;
+  }).join('');
+  return `<div class="card table-wrap"><table><tr><th>ตลาด</th><th>ฝั่ง</th><th>จำนวนหุ้น</th><th>ราคาเฉลี่ย</th><th>ราคาปัจจุบัน</th><th>มูลค่า</th><th>กำไร/ขาดทุน</th><th></th></tr>${rows}</table></div>`;
+}
+function renderHistory(history){
+  if(!history.length) return emptyState('—','ยังไม่มีโพซิชันที่ปิดแล้ว','โพซิชันจะย้ายมาที่นี่เมื่อตลาดตัดสินผลแล้ว');
+  const rows = history.map(p=>{
+    const m = markets.find(x=>x.id===p.marketId);
+    const won = m.outcome===p.side, payout = won ? p.shares : 0, pnl = payout - p.cost;
+    return `<tr>
+      <td><a href="market-detail.html?id=${m.id}">${esc(m.question)}</a></td>
+      <td><span class="badge ${p.side==='yes'?'badge-yes':'badge-no'}">${p.side==='yes'?'ใช่':'ไม่'}</span></td>
+      <td class="mono">${p.shares.toFixed(2)}</td>
+      <td class="mono">${money(p.cost)}</td>
+      <td><span class="badge ${won?'badge-yes':'badge-no'}">${won?'ชนะ':'แพ้'}</span></td>
+      <td class="mono">${money(payout)}</td>
+      <td class="mono ${pnl>=0?'pnl-pos':'pnl-neg'}">${pnl>=0?'+':''}${money(pnl)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="card table-wrap"><table><tr><th>ตลาด</th><th>ฝั่ง</th><th>จำนวนหุ้น</th><th>ต้นทุน</th><th>ผลลัพธ์</th><th>เงินที่ได้รับ</th><th>กำไร/ขาดทุน</th></tr>${rows}</table></div>`;
+}
+
+function draw(){
+  const tab = qs('tab')==='history' ? 'history' : 'open';
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>พอร์ตของฉัน</h1><div class="sub">ยอดคงเหลือ <span class="mono">${money(balance)}</span></div></div>
+    <div class="tabbar">
+      <button class="${tab==='open'?'active':''}" onclick="location.href='portfolio.html'">โพซิชันที่เปิดอยู่</button>
+      <button class="${tab==='history'?'active':''}" onclick="location.href='portfolio.html?tab=history'">ประวัติ</button>
+    </div>
+    ${tab==='open' ? renderOpen(positions.filter(p=>!p.settled)) : renderHistory(positions.filter(p=>p.settled))}
+  `;
+}
+draw();
+wireSearch();
+
+</script>
+</body>
+</html>

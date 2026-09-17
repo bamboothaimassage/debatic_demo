@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — ตลาดทั้งหมด</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let markets = loadMarkets();
+let notifications = loadNotifications();
+const sessionUser = Session.current();
+let balance = sessionUser ? loadBalance() : 0;
+let heroSlide = 0;
+
+function isDefaultView(){
+  const cat = qs('cat'), range = qs('range'), q = qs('q'), tagged = qs('tagged');
+  return !cat && (!range || range==='all') && !q && !tagged;
+}
+function renderHero(){
+  const el = document.getElementById('heroRoot');
+  if(!el) return; // not on the default view right now, nothing to update
+  el.innerHTML = heroSectionHtml(markets, heroSlide);
+}
+function setHeroSlide(i){ heroSlide = i; renderHero(); }
+function heroNext(){ heroSlide++; renderHero(); }
+function heroPrev(){ heroSlide--; renderHero(); }
+// Auto-advance the carousel. Set up once (not inside draw()) so redraws never stack up
+// duplicate intervals; renderHero() itself is a no-op whenever #heroRoot isn't on the page.
+setInterval(heroNext, 6000);
+// A tag toggled from any market card (this page or another) fires this — redraw so the
+// rail's tagged count and, if we're on the "ตลาดที่ติดแท็ก" filter, the grid itself stay
+// in sync without every card needing to know how to patch the rest of the page.
+window.addEventListener('debatic:tagchange', draw);
+
+function draw(){
+  const cat = qs('cat');
+  const range = qs('range');
+  const q = (qs('q')||'').toLowerCase();
+  const tagged = qs('tagged')==='1';
+
+  document.getElementById('root').innerHTML = traderShell(cat, sessionUser, balance, sessionUser && notifications.some(n=>!n.read));
+
+  const hotTagById = hotMarketTagById(markets);
+  let list = markets.filter(m=>m.status!=='resolved');
+  if(cat && cat!=='All') list = list.filter(m=>m.category===cat);
+  if(range && range!=='all') list = list.filter(m=>m.frequency===range);
+  if(tagged) list = list.filter(m=>isTagged(m.id));
+  if(q) list = list.filter(m=>m.question.toLowerCase().includes(q));
+
+  document.getElementById('view').innerHTML = `
+    <div class="view-with-rail" style="padding:0;">
+      <aside class="filter-rail">${filterRailHtml(markets, cat, range, tagged)}</aside>
+      <div style="flex:1;min-width:0;">
+        ${isDefaultView() ? `<div id="heroRoot">${heroSectionHtml(markets, heroSlide)}</div>` : ''}
+        <div class="view-header">
+          <div><h1>${tagged ? '🏷️ ตลาดที่ติดแท็ก' : (cat ? catTh(cat) : 'ตลาดทั้งหมด')}${range && range!=='all' ? ' · '+freqTh(range) : ''}</h1><div class="sub">${list.length} ตลาดแบบใช่/ไม่เปิดอยู่ · มีแค่ ใช่ / ไม่ เท่านั้น</div></div>
+          <button class="btn btn-primary" onclick="location.href='create-market.html'">+ แนะนำกระทู้ใหม่</button>
+        </div>
+        ${q ? `<div class="sub" style="margin-bottom:14px;">ผลการค้นหา “${esc(q)}”</div>` : ''}
+        ${list.length ? `<div class="market-grid">${list.map(m=>marketCard(m, hotTagById[m.id])).join('')}</div>` : emptyState(tagged?'🏷️':'∅', tagged?'ยังไม่มีตลาดที่ติดแท็ก':'ไม่พบตลาดที่ตรงกับตัวกรองของคุณ', tagged?'กดไอคอน 🏷️ บนการ์ดตลาดที่คุณสนใจเพื่อติดแท็กไว้ที่นี่':'ลองเปลี่ยนหมวดหมู่หรือล้างคำค้นหา')}
+      </div>
+    </div>
+  `;
+  wireSearch();
+  if(document.getElementById('searchInput') && qs('q')) document.getElementById('searchInput').value = qs('q');
+}
+draw();
+
+</script>
+</body>
+</html>

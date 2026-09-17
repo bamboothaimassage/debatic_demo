@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — กระเป๋าเงิน</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+if(!requireLogin()) throw new Error('ต้องเข้าสู่ระบบก่อนจึงจะดูกระเป๋าเงินของคุณได้');
+
+let notifications = loadNotifications();
+let transactions = loadTransactions();
+let financeRequests = loadFinanceRequests();
+let balance = loadBalance();
+document.getElementById('root').innerHTML = traderShell(null, Session.current(), balance, notifications.some(n=>!n.read));
+
+function myPendingRequests(){ return financeRequests.filter(r=>r.playerId==='kim' && r.status==='pending'); }
+function deposit(){
+  const amount = Number(document.getElementById('depAmt').value);
+  if(!amount || amount<=0){ toast('กรุณาระบุจำนวนเงินที่ต้องการฝาก', true); return; }
+  financeRequests.unshift({ id:'fr'+Math.random().toString(36).slice(2,8), playerId:'kim', player:'You', type:'deposit', amount, time:'เมื่อสักครู่', status:'pending' });
+  saveFinanceRequests(financeRequests);
+  document.getElementById('depAmt').value = '';
+  toast('ส่งคำขอฝากเงิน '+money(amount)+' แล้ว — รอการอนุมัติจากผู้ดูแลระดับสูงขึ้นไป');
+  draw();
+}
+function withdraw(){
+  const amount = Number(document.getElementById('wdAmt').value);
+  if(!amount || amount<=0){ toast('กรุณาระบุจำนวนเงินที่ต้องการถอน', true); return; }
+  const reserved = myPendingRequests().filter(r=>r.type==='withdraw').reduce((s,r)=>s+r.amount,0);
+  if(amount > balance - reserved){ toast('จำนวนเงินนี้เกินยอดคงเหลือที่ยังไม่ถูกจองไว้ในคำขอถอนอื่นที่รออนุมัติอยู่', true); return; }
+  financeRequests.unshift({ id:'fr'+Math.random().toString(36).slice(2,8), playerId:'kim', player:'You', type:'withdraw', amount, time:'เมื่อสักครู่', status:'pending' });
+  saveFinanceRequests(financeRequests);
+  document.getElementById('wdAmt').value = '';
+  toast('ส่งคำขอถอนเงิน '+money(amount)+' แล้ว — รอการอนุมัติจากผู้ดูแลระดับสูงขึ้นไป');
+  draw();
+}
+function cancelFinanceRequest(id){
+  financeRequests = financeRequests.filter(r=>r.id!==id);
+  saveFinanceRequests(financeRequests);
+  toast('ยกเลิกคำขอแล้ว');
+  draw();
+}
+function draw(){
+  const tab = qs('tab')==='withdraw' ? 'withdraw' : 'deposit';
+  const myPending = myPendingRequests();
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>กระเป๋าเงิน</h1><div class="sub">เงินทดลอง — ไม่ใช่เงินจริง</div></div>
+    <div class="stat-row" style="border:none;padding-top:0;"><div class="stat"><span class="v mono" style="font-size:28px;">${money(balance)}</span><span class="k">ยอดคงเหลือที่ใช้ได้</span></div></div>
+    <div class="page-note">การฝากและถอนเงินทุกครั้งต้องได้รับการอนุมัติจากผู้ดูแลระดับสูงขึ้นไปก่อน จึงจะมีผลกับยอดคงเหลือของคุณ — โดยทั่วไปจะได้รับการตรวจสอบภายในไม่กี่นาที</div>
+    ${myPending.length ? `
+    <div class="card" style="max-width:420px;padding:16px 20px;margin-bottom:18px;background:var(--warn-soft);border-color:transparent;">
+      <h3 style="font-size:13px;margin-bottom:10px;color:var(--warn);">คำขอที่รอการอนุมัติ (${myPending.length})</h3>
+      ${myPending.map(r=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--border);">
+        <span style="font-size:13px;color:var(--text);">${r.type==='deposit'?'ฝาก':'ถอน'} <b class="mono">${money(r.amount)}</b> · ${r.time}</span>
+        <button class="btn btn-sm btn-ghost" onclick="cancelFinanceRequest('${r.id}')">ยกเลิกคำขอ</button>
+      </div>`).join('')}
+    </div>` : ''}
+    <div class="tabbar">
+      <button class="${tab==='deposit'?'active':''}" onclick="location.href='wallet.html'">ฝากเงิน</button>
+      <button class="${tab==='withdraw'?'active':''}" onclick="location.href='wallet.html?tab=withdraw'">ถอนเงิน</button>
+    </div>
+    <div class="card" style="max-width:420px;padding:22px;margin-bottom:26px;">
+      ${tab==='deposit' ? `
+        <div class="field"><label for="depAmt">จำนวนเงินที่ต้องการฝาก</label><input id="depAmt" type="number" min="1" placeholder="0.00"></div>
+        <div class="amt-chips">${[100,500,1000].map(v=>`<button onclick="document.getElementById('depAmt').value=${v}">$${v}</button>`).join('')}</div>
+        <button class="btn btn-primary btn-block" onclick="deposit()">ส่งคำขอฝากเงิน</button>
+      ` : `
+        <div class="field"><label for="wdAmt">จำนวนเงินที่ต้องการถอน</label><input id="wdAmt" type="number" min="1" max="${balance}" placeholder="0.00"></div>
+        <div class="amt-chips"><button onclick="document.getElementById('wdAmt').value=${balance.toFixed(2)}">สูงสุด</button></div>
+        <button class="btn btn-primary btn-block" onclick="withdraw()">ส่งคำขอถอนเงิน</button>
+      `}
+    </div>
+    <h3 style="font-size:16px;margin-bottom:8px;">ประวัติการทำธุรกรรม</h3>
+    <div class="card table-wrap"><table><tr><th>ประเภท</th><th>จำนวนเงิน</th><th>หมายเหตุ</th><th>เมื่อไหร่</th></tr>
+      ${transactions.map(t=>`<tr><td><span class="badge ${t.type==='deposit'?'badge-yes':'badge-no'}">${t.type==='deposit'?'ฝากเงิน':'ถอนเงิน'}</span></td><td class="mono">${t.type==='withdraw'?'-':'+'}${money(t.amount)}</td><td>${esc(t.note)}</td><td class="sub">${t.time}</td></tr>`).join('')}
+    </table></div>
+  `;
+}
+draw();
+wireSearch();
+
+</script>
+</body>
+</html>

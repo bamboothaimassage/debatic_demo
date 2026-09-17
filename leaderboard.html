@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — อันดับผู้เทรด</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let notifications = loadNotifications();
+let positions = loadPositions();
+let markets = loadMarkets();
+let balance = loadBalance();
+const sessionUser = Session.current();
+document.getElementById('root').innerHTML = traderShell(null, sessionUser, balance, sessionUser && notifications.some(n=>!n.read));
+function priceFor(m, side){ return side==='yes' ? m.yesPrice/100 : (100-m.yesPrice)/100; }
+function curVal(p){ const m = markets.find(x=>x.id===p.marketId); return m ? p.shares*priceFor(m,p.side) : 0; }
+
+function draw(){
+  const range = qs('range')||'all';
+  let list = [...LB_USERS];
+  if(sessionUser){
+    const meRow = { name:'คุณ', handle:sessionUser.handle, isMe:true,
+      volume: positions.reduce((s,p)=>s+p.cost,0),
+      pnl: positions.filter(p=>p.settled).reduce((s,p)=>{ const m=markets.find(x=>x.id===p.marketId); const won=m.outcome===p.side; return s+((won?p.shares:0)-p.cost); },0) + positions.filter(p=>!p.settled).reduce((s,p)=>s+(curVal(p)-p.cost),0) };
+    list.push(meRow);
+  }
+  const mult = range==='today'?0.06:range==='week'?0.3:1;
+  list = list.map(u=>({...u, _pnl:u.isMe?u.pnl:u.pnl*mult, _vol:u.isMe?u.volume:u.volume*mult}));
+  list.sort((a,b)=>b._pnl-a._pnl);
+  const rows = list.map((u,i)=>`<tr style="${u.isMe?'background:var(--accent-soft);':''}">
+    <td class="lb-rank">${i+1}</td>
+    <td><div class="lb-user"><div class="avatar" style="${u.isMe?avatarStyle(sessionUser.avatarColor, sessionUser.avatarImage):avatarStyle(userColor(u.name))}">${u.isMe?avatarLabel(sessionUser.avatarLetter, sessionUser.avatarImage):initials(u.name)}</div>
+      <a href="profile.html?id=${u.isMe?'me':u.handle.slice(1)}">${esc(u.name)}</a></div></td>
+    <td class="mono">${money(u._vol)}</td>
+    <td class="mono ${u._pnl>=0?'pnl-pos':'pnl-neg'}">${u._pnl>=0?'+':''}${money(u._pnl)}</td>
+  </tr>`).join('');
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>ลีดเดอร์บอร์ด</h1></div>
+    <div class="chips">
+      <a class="chip ${range==='today'?'active':''}" href="leaderboard.html?range=today">วันนี้</a>
+      <a class="chip ${range==='week'?'active':''}" href="leaderboard.html?range=week">สัปดาห์นี้</a>
+      <a class="chip ${range==='all'||!range?'active':''}" href="leaderboard.html">ตลอดเวลา</a>
+    </div>
+    <div class="card table-wrap"><table><tr><th>#</th><th>ผู้เทรด</th><th>ปริมาณ</th><th>กำไรขาดทุน</th></tr>${rows}</table></div>
+  `;
+}
+draw();
+wireSearch();
+
+</script>
+</body>
+</html>

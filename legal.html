@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — ข้อกำหนดและความเป็นส่วนตัว</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let notifications = loadNotifications();
+let balance = loadBalance();
+const sessionUser = Session.current();
+document.getElementById('root').innerHTML = traderShell(null, sessionUser, balance, sessionUser && notifications.some(n=>!n.read));
+function draw(){
+  const tab = qs('tab')==='privacy' ? 'privacy' : 'terms';
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>ข้อกำหนดทางกฎหมาย</h1></div>
+    <div class="tabbar">
+      <button class="${tab==='terms'?'active':''}" onclick="location.href='legal.html'">ข้อกำหนดการใช้งาน</button>
+      <button class="${tab==='privacy'?'active':''}" onclick="location.href='legal.html?tab=privacy'">นโยบายความเป็นส่วนตัว</button>
+    </div>
+    <div class="card prose" style="max-width:680px;padding:24px;">
+      <p><span class="badge badge-warn">เนื้อหาตัวอย่าง</span> หน้านี้เป็นเนื้อหาชั่วคราวสำหรับใช้สาธิตเท่านั้น — โปรดเปลี่ยนเป็นข้อความทางกฎหมายจริงก่อนนำไปใช้งานจริง</p>
+      ${tab==='terms' ? `
+        <p><b>1. ใช้เพื่อการสาธิตเท่านั้น</b> Debatic ตามที่แสดงในหน้านี้เป็นเพียงต้นแบบที่ไม่มีการทำงานจริง ไม่มีการใช้เงินจริง บัญชีจริง หรือการเดิมพันจริงแต่อย่างใด</p>
+        <p><b>2. ไม่มีการรับประกัน</b> อินเทอร์เฟซนี้จัดทำขึ้นเพื่อการประเมินผลเท่านั้น และอาจมีการเปลี่ยนแปลงได้ตลอดเวลาโดยไม่ต้องแจ้งให้ทราบล่วงหน้า</p>
+        <p><b>3. คุณสมบัติผู้ใช้งาน</b> เวอร์ชันที่ใช้งานจริงจะต้องระบุเขตอำนาจศาลที่มีสิทธิ์ใช้งานและข้อกำหนดด้านอายุไว้ในส่วนนี้</p>
+      ` : `
+        <p><b>ข้อมูลที่จัดเก็บ</b> ต้นแบบนี้ไม่มีการจัดเก็บข้อมูลใด ๆ — กิจกรรมทั้งหมดจะอยู่ในหน่วยความจำของเบราว์เซอร์สำหรับหน้าปัจจุบันเท่านั้น</p>
+        <p><b>บุคคลภายนอก</b> เวอร์ชันที่ใช้งานจริงจะเปิดเผยผู้ให้บริการด้านการวิเคราะห์ข้อมูล การชำระเงิน หรือการยืนยันตัวตนไว้ในส่วนนี้</p>
+      `}
+    </div>
+  `;
+}
+draw();
+wireSearch();
+
+</script>
+</body>
+</html>

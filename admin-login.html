@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — เข้าสู่ระบบผู้ดูแล</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+<style>
+  body{ background:#0E1114; }
+  .admin-auth-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .admin-auth-card{ width:100%; max-width:380px; background:#171B21; border:1px solid #262C35; border-radius:16px; padding:32px 28px; color:#E7EAEE; }
+  .admin-auth-card .field label{ color:#9AA3AF; }
+  .admin-auth-card .field input{ background:#0E1114; border:1px solid #2A303A; color:#E7EAEE; }
+  .admin-auth-card .auth-hint{ color:#7C8592; }
+  .admin-auth-card .auth-hint .mono{ color:#C8CDD4; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+function renderAdminAuth(){
+  document.getElementById('root').innerHTML = `
+    <div class="admin-auth-screen">
+      <div class="admin-auth-card">
+        <div class="auth-brand" style="margin-bottom:22px;">
+          <div class="mark" style="background:var(--accent);color:#fff;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;">D</div>
+          <div style="font-family:var(--font-display);font-weight:600;font-size:21px;color:#fff;">Debatic <span style="color:#7C8592;font-weight:500;font-size:14px;">· ผู้ดูแลระบบ</span></div>
+        </div>
+        <div id="authError" class="auth-error" hidden></div>
+        <div class="field"><label for="loginUser">ชื่อผู้ใช้ผู้ดูแล</label><input id="loginUser" type="text" placeholder="admin" value="admin"></div>
+        <div class="field"><label for="loginPass">รหัสผ่าน</label><input id="loginPass" type="password" placeholder="admin1234" value="admin1234"></div>
+        <button class="btn btn-primary btn-block" onclick="attemptAdminLogin()">เข้าสู่ระบบผู้ดูแล</button>
+        <div class="auth-hint" style="margin-top:14px;">บัญชีผู้ดูแลทดลอง: <span class="mono">admin / admin1234</span></div>
+        <a href="login.html" class="sub" style="display:block;margin-top:18px;font-size:13px;color:#7C8592;">← กลับไปหน้าเข้าสู่ระบบผู้เล่น</a>
+      </div>
+    </div>
+  `;
+}
+function attemptAdminLogin(){
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('authError');
+  if(user===ADMIN_ACCOUNT.username && pass===ADMIN_ACCOUNT.password){
+    location.href = 'admin-dashboard.html';
+  } else {
+    errEl.hidden = false;
+    errEl.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง ลองใช้ admin / admin1234';
+  }
+}
+renderAdminAuth();
+
+</script>
+</body>
+</html>

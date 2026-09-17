@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — จัดการตลาด</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let markets = loadMarkets();
+let pending = loadPendingSuggestions();
+let editingId = null;
+let amImageData = null; // pending uploaded logo for the "create market" form, before it's saved
+let editImageData = {}; // pending uploaded/removed logo per market id, while its edit row is open
+document.getElementById('root').innerHTML = adminShell('admin-markets.html', ADMIN_ACCOUNT);
+
+function uploadMarketImage(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    amImageData = reader.result;
+    const el = document.getElementById('amImagePreview');
+    if(el) el.innerHTML = catIcon({ image: amImageData });
+  };
+  reader.readAsDataURL(file);
+}
+function uploadEditMarketImage(id, input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    editImageData[id] = reader.result;
+    const el = document.getElementById('edImgPreview_'+id);
+    if(el) el.innerHTML = catIcon({ image: reader.result });
+  };
+  reader.readAsDataURL(file);
+}
+function resetEditMarketImage(id){
+  editImageData[id] = null;
+  const m = markets.find(x=>x.id===id);
+  const el = document.getElementById('edImgPreview_'+id);
+  if(el) el.innerHTML = catIcon({ category: m.category });
+}
+
+// Every action below (approve, resolve, feature, edit, unlist, create) saves the whole
+// markets array back to Store — so a resolution or price change made here, or a trade
+// made by a player, is the same shared snapshot everywhere instead of resetting per page.
+function persistExtras(){ saveMarkets(markets); }
+
+function approveSuggestion(id){
+  const s = pending.find(x=>x.id===id);
+  if(!s) return;
+  pending = pending.filter(x=>x.id!==id);
+  savePendingSuggestions(pending);
+  markets.unshift({ id:s.id, category:s.category, question:s.question, yesPrice:s.yesPrice, yesPriceExact:s.yesPrice, volume:0,
+    closes:s.closes, rules:s.rules, createdBy:s.submittedBy, status:'open', history:[{t:0,yes:s.yesPrice}],
+    isNew:true, traders:0, featured:false, extra:true, frequency:FREQUENCIES[hashStr(s.id)%FREQUENCIES.length] });
+  persistExtras();
+  toast('อนุมัติกระทู้ “'+s.question+'” แล้ว — ผู้เล่นจะเห็นในหน้าตลาดทันที');
+  draw();
+}
+function rejectSuggestion(id){
+  const s = pending.find(x=>x.id===id);
+  pending = pending.filter(x=>x.id!==id);
+  savePendingSuggestions(pending);
+  toast('ปฏิเสธคำแนะนำ'+(s?' “'+s.question+'”':'')+' แล้ว');
+  draw();
+}
+function resolve(id, outcome){
+  if(!canResolveMarkets(loadPreviewRole())){ toast('บทบาทนี้ไม่มีสิทธิ์ตัดสินผลตลาด', true); return; }
+  const m = markets.find(x=>x.id===id);
+  m.status = 'resolved'; m.outcome = outcome; m.yesPrice = outcome==='yes'?100:0; m.yesPriceExact = m.yesPrice;
+  persistExtras();
+  const settled = settleMarketPositions(m);
+  toast('ตัดสินผล “'+m.question+'” เป็น '+(outcome==='yes'?'ใช่':'ไม่')+' แล้ว'
+    + (settled.count ? ' — จ่ายผลตอบแทน '+money(settled.payout)+' ให้ผู้ถือโพซิชันแล้ว' : ''));
+  draw();
+}
+function unlist(id){
+  markets = markets.filter(m=>m.id!==id);
+  persistExtras();
+  toast('ถอดตลาดออกแล้ว');
+  draw();
+}
+function toggleFeature(id){
+  if(!canFeatureMarkets(loadPreviewRole())){ toast('บทบาทนี้ไม่มีสิทธิ์ปักหมุดแนะนำตลาด', true); return; }
+  const m = markets.find(x=>x.id===id);
+  m.featured = !m.featured;
+  persistExtras();
+  toast(m.featured ? 'แนะนำในหน้าแรกแล้ว' : 'นำออกจากรายการแนะนำแล้ว');
+  draw();
+}
+function toggleEdit(id){
+  if(editingId) delete editImageData[editingId]; // discard any unsaved logo change when closing/switching rows
+  editingId = editingId===id ? null : id;
+  draw();
+}
+function saveEdit(id){
+  const m = markets.find(x=>x.id===id);
+  m.question = document.getElementById('edQ_'+id).value.trim() || m.question;
+  m.rules = document.getElementById('edR_'+id).value.trim() || m.rules;
+  m.closes = document.getElementById('edC_'+id).value || m.closes;
+  m.frequency = document.getElementById('edF_'+id).value || m.frequency;
+  if(Object.prototype.hasOwnProperty.call(editImageData, id)){
+    m.image = editImageData[id];
+    delete editImageData[id];
+  }
+  editingId = null;
+  persistExtras();
+  toast('อัปเดตตลาดแล้ว');
+  draw();
+}
+function addMarket(){
+  const q = document.getElementById('amQ').value.trim();
+  if(!q){ toast('กรุณาตั้งคำถามของตลาด', true); return; }
+  const yes = Number(document.getElementById('amYes').value)||50;
+  markets.unshift({ id:'m'+Math.random().toString(36).slice(2,8), category:document.getElementById('amCat').value, question:q,
+    yesPrice:yes, yesPriceExact:yes, volume:0, closes:document.getElementById('amDate').value, rules:document.getElementById('amDesc').value.trim()||'กติกาการตัดสินตามที่อธิบายไว้ข้างต้น',
+    createdBy:ADMIN_ACCOUNT.name, status:'open', history:[{t:0,yes}], isNew:true, traders:0, featured:false, extra:true, frequency:document.getElementById('amFreq').value,
+    image:amImageData||null });
+  document.getElementById('amQ').value=''; document.getElementById('amDesc').value='';
+  amImageData = null;
+  persistExtras();
+  toast('สร้างตลาดแล้ว — ผู้เล่นจะเห็นในหน้าตลาดทันที');
+  draw();
+}
+function draw(){
+  const statusFilter = qs('status') || 'all';
+  const shownMarkets = statusFilter==='all' ? markets : markets.filter(m=>m.status===statusFilter);
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>จัดการตลาด</h1><div class="sub">ทั้งหมด ${markets.length} รายการ · เปิดอยู่ ${markets.filter(m=>m.status==='open').length} รายการ</div></div>
+    <div class="page-note">การตัดสินผลตลาดที่นี่คือการชำระผลจริงให้ทุกสถานะของผู้เทรด — เลือกใช่หรือไม่เมื่อทราบผลจริงในโลกจริงแล้ว การแนะนำจะปักหมุดตลาดไว้บนสุดของหน้าแรก ตลาดที่สร้างหรืออนุมัติจากหน้านี้จะบันทึกไว้ในเบราว์เซอร์นี้และแสดงบนหน้าตลาดของผู้เล่นทันที (ยังไม่ใช่ฐานข้อมูลจริง — ทีมพัฒนาแบ็กเอนด์ของคุณจะเชื่อมส่วนนี้เข้ากับ API จริงภายหลัง)</div>
+    ${!canResolveMarkets(loadPreviewRole()) ? `<div class="page-note" style="background:var(--warn-soft);color:var(--warn);">บทบาท “${ROLE_LABELS_TH[loadPreviewRole()]}” สร้างและแก้ไขตลาดได้ตามปกติ แต่การตัดสินผลและการปักหมุดแนะนำเป็นสิทธิ์ของผู้ดูแลระดับสูงขึ้นไป</div>` : ''}
+    ${pending.length ? `
+    <h3 style="font-size:15px;margin-bottom:8px;">รอตรวจสอบ <span class="badge badge-accent">${pending.length}</span></h3>
+    <div class="card table-wrap" style="margin-bottom:24px;"><table>
+      <tr><th>คำถาม</th><th>หมวดหมู่</th><th>ปิดรับ</th><th>ผู้เสนอ</th><th></th></tr>
+      ${pending.map(s=>`<tr>
+        <td>${esc(s.question)}<div class="sub" style="font-size:11.5px;margin-top:3px;">${esc(s.rules)}</div></td>
+        <td>${catTh(s.category)}</td>
+        <td class="sub">${s.closes}</td>
+        <td class="sub">${esc(s.submittedBy)} · ${s.submittedAt}</td>
+        <td><div style="display:flex;gap:6px;">
+          <button class="btn btn-sm btn-yes" onclick="approveSuggestion('${s.id}')">อนุมัติ</button>
+          <button class="btn btn-sm btn-no" onclick="rejectSuggestion('${s.id}')">ปฏิเสธ</button>
+        </div></td>
+      </tr>`).join('')}
+    </table></div>
+    ` : ''}
+    <h3 style="font-size:15px;margin-bottom:8px;">สร้างตลาด</h3>
+    <div class="card" style="max-width:680px;padding:20px;margin-bottom:24px;">
+      <div class="field"><label for="amQ">คำถาม</label><input id="amQ" type="text" placeholder="___ จะเกิดขึ้นภายใน ___ หรือไม่?"></div>
+      <div style="display:flex;gap:12px;">
+        <div class="field" style="flex:1;"><label for="amCat">หมวดหมู่</label><select id="amCat">${CATEGORIES.map(c=>`<option value="${c}">${catTh(c)}</option>`).join('')}</select></div>
+        <div class="field" style="flex:1;"><label for="amDate">วันที่ตัดสินผล</label><input id="amDate" type="date" value="${defaultFutureDate(30)}"></div>
+        <div class="field" style="flex:1;"><label for="amYes">% ใช่ เริ่มต้น</label><input id="amYes" type="number" min="1" max="99" value="50"></div>
+        <div class="field" style="flex:1;"><label for="amFreq">ความถี่</label><select id="amFreq">${FREQUENCIES.map(f=>`<option value="${f}" ${f==='monthly'?'selected':''}>${freqTh(f)}</option>`).join('')}</select></div>
+      </div>
+      <div class="field"><label for="amDesc">กติกาการตัดสิน</label><textarea id="amDesc" placeholder="อธิบายวิธีและเวลาที่ตลาดนี้จะตัดสินผล พร้อมแหล่งอ้างอิง"></textarea></div>
+      <div class="field">
+        <label>โลโก้ตลาด (ไม่บังคับ)</label>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="amImagePreview">${catIcon({ category: CATEGORIES[0] })}</div>
+          <input id="amImageInput" type="file" accept="image/*" onchange="uploadMarketImage(this)">
+        </div>
+        <div class="sub" style="font-size:11.5px;margin-top:4px;">ถ้าไม่อัปโหลด ระบบจะแสดงไอคอนสีตามหมวดหมู่แทนโดยอัตโนมัติ</div>
+      </div>
+      <button class="btn btn-primary" onclick="addMarket()">+ สร้างตลาด</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <h3 style="font-size:15px;margin:0;">ตลาดทั้งหมด</h3>
+      <div class="chips" style="margin:0;">
+        <a class="chip ${statusFilter==='all'?'active':''}" href="admin-markets.html">ทั้งหมด</a>
+        <a class="chip ${statusFilter==='open'?'active':''}" href="admin-markets.html?status=open">เปิดอยู่</a>
+        <a class="chip ${statusFilter==='resolved'?'active':''}" href="admin-markets.html?status=resolved">ตัดสินผลแล้ว</a>
+      </div>
+    </div>
+    <div class="card table-wrap" style="margin-top:8px;"><table>
+      <tr><th>คำถาม</th><th>หมวดหมู่</th><th>ความถี่</th><th>สถานะ</th><th>ปริมาณ</th><th>ปิดรับ</th><th></th></tr>
+      ${shownMarkets.length===0 ? `<tr><td colspan="7" style="text-align:center;padding:28px;">${emptyState('◧','ไม่มีตลาดในตัวกรองนี้','ลองเลือกตัวกรองอื่นด้านบน')}</td></tr>` : shownMarkets.map(m=>`<tr>
+        <td><div style="display:flex;align-items:center;gap:10px;">${catIcon(m)}<div><a href="market-detail.html?id=${m.id}">${esc(m.question)}</a>${m.featured?' <span class="badge badge-accent">แนะนำ</span>':''}</div></div></td>
+        <td>${catTh(m.category)}</td>
+        <td class="sub">${freqTh(m.frequency)}</td>
+        <td>${m.status==='open' ? '<span class="badge badge-accent">เปิดอยู่</span>' : `<span class="badge ${m.outcome==='yes'?'badge-yes':'badge-no'}">ตัดสินผล ${m.outcome==='yes'?'ใช่':'ไม่'}</span>`}</td>
+        <td class="mono">${money(m.volume)}</td>
+        <td class="sub">${m.closes}</td>
+        <td><div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${m.status==='open' && canResolveMarkets(loadPreviewRole()) ? `<button class="btn btn-sm btn-yes" onclick="resolve('${m.id}','yes')">ตัดสินเป็นใช่</button><button class="btn btn-sm btn-no" onclick="resolve('${m.id}','no')">ตัดสินเป็นไม่</button>` : ''}
+          ${canFeatureMarkets(loadPreviewRole()) ? `<button class="btn btn-sm btn-accent-outline" onclick="toggleFeature('${m.id}')">${m.featured?'ยกเลิกแนะนำ':'แนะนำ'}</button>` : ''}
+          <button class="btn btn-sm" onclick="toggleEdit('${m.id}')">${iconGear()}${editingId===m.id?'ยกเลิก':'แก้ไข'}</button>
+          <button class="btn btn-sm btn-ghost" onclick="unlist('${m.id}')">${iconTrash()}ถอดออก</button>
+        </div></td>
+      </tr>
+      ${editingId===m.id ? `<tr class="row-expand"><td colspan="7"><div style="padding:12px;display:flex;flex-direction:column;gap:10px;max-width:640px;">
+          <div class="field" style="margin:0;"><label>คำถาม</label><input id="edQ_${m.id}" type="text" value="${esc(m.question)}"></div>
+          <div class="field" style="margin:0;"><label>กติกาการตัดสิน</label><textarea id="edR_${m.id}">${esc(m.rules)}</textarea></div>
+          <div class="field" style="margin:0;">
+            <label>โลโก้ตลาด</label>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div id="edImgPreview_${m.id}">${catIcon(m)}</div>
+              <input type="file" accept="image/*" onchange="uploadEditMarketImage('${m.id}', this)">
+              <button class="btn btn-sm btn-outline" type="button" onclick="resetEditMarketImage('${m.id}')">ใช้ไอคอนเริ่มต้น</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;">
+            <div class="field" style="margin:0;max-width:200px;"><label>วันที่ปิดรับ</label><input id="edC_${m.id}" type="date" value="${m.closes}"></div>
+            <div class="field" style="margin:0;max-width:200px;"><label>ความถี่</label><select id="edF_${m.id}">${FREQUENCIES.map(f=>`<option value="${f}" ${m.frequency===f?'selected':''}>${freqTh(f)}</option>`).join('')}</select></div>
+          </div>
+          <button class="btn btn-primary btn-sm" style="width:fit-content;" onclick="saveEdit('${m.id}')">บันทึกการเปลี่ยนแปลง</button>
+        </div></td></tr>` : ''}`).join('')}
+    </table></div>
+  `;
+}
+draw();
+
+</script>
+</body>
+</html>

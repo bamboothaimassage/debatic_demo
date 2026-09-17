@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — จัดการทีมงาน</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let staff = loadStaff();
+let expandedRole = null;
+document.getElementById('root').innerHTML = adminShell('admin-staff.html', ADMIN_ACCOUNT);
+if(!guardAdminRole('superadmin', 'จัดการทีมงาน')) throw new Error('บทบาทนี้ไม่มีสิทธิ์เข้าถึงหน้าจัดการทีมงาน');
+
+const ROLE_BADGE = { owner:'badge-warn', superadmin:'badge-accent', admin:'badge' };
+
+function addStaffMember(){
+  const actor = loadPreviewRole();
+  const options = assignableRoles(actor);
+  if(!options.length){ toast('บทบาทนี้ไม่มีสิทธิ์เพิ่มทีมงาน', true); return; }
+  const name = document.getElementById('nsName').value.trim();
+  const email = document.getElementById('nsEmail').value.trim();
+  const role = document.getElementById('nsRole').value;
+  if(!name || !email){ toast('กรุณากรอกชื่อและอีเมล', true); return; }
+  if(!options.includes(role)){ toast('บทบาทนี้ไม่มีสิทธิ์กำหนดตำแหน่งดังกล่าว', true); return; }
+  const id = 'st'+Math.random().toString(36).slice(2,8);
+  staff.unshift({ id, name, email, role, status:'active' });
+  document.getElementById('nsName').value=''; document.getElementById('nsEmail').value='';
+  toast('เพิ่มทีมงานแล้ว: '+name);
+  saveStaff(staff);
+  draw();
+}
+function toggleRoleEditor(id){ expandedRole = expandedRole===id ? null : id; draw(); }
+function changeStaffRole(id, newRole){
+  const actor = loadPreviewRole();
+  const row = staff.find(x=>x.id===id);
+  if(!row) return;
+  if(!canActOnStaffRole(actor, row.role)){ toast('บทบาทนี้ไม่มีสิทธิ์จัดการบัญชีนี้', true); return; }
+  if(!assignableRoles(actor).includes(newRole)){ toast('บทบาทนี้ไม่มีสิทธิ์กำหนดตำแหน่งดังกล่าว', true); return; }
+  row.role = newRole;
+  expandedRole = null;
+  toast('เปลี่ยนบทบาทของ '+row.name+' เป็น '+ROLE_LABELS_TH[newRole]+' แล้ว');
+  saveStaff(staff);
+  draw();
+}
+function toggleStaffStatus(id){
+  const actor = loadPreviewRole();
+  const row = staff.find(x=>x.id===id);
+  if(!row) return;
+  if(!canActOnStaffRole(actor, row.role)){ toast('บทบาทนี้ไม่มีสิทธิ์จัดการบัญชีนี้', true); return; }
+  row.status = row.status==='active' ? 'suspended' : 'active';
+  toast((row.status==='active'?'เปิดใช้งานอีกครั้ง: ':'ระงับการใช้งาน: ')+row.name);
+  saveStaff(staff);
+  draw();
+}
+function removeStaffMember(id){
+  const actor = loadPreviewRole();
+  const row = staff.find(x=>x.id===id);
+  if(!row) return;
+  if(!canActOnStaffRole(actor, row.role)){ toast('บทบาทนี้ไม่มีสิทธิ์จัดการบัญชีนี้', true); return; }
+  staff = staff.filter(x=>x.id!==id);
+  toast('ลบออกจากทีมงานแล้ว: '+row.name);
+  saveStaff(staff);
+  draw();
+}
+function draw(){
+  const actor = loadPreviewRole();
+  const canAdd = assignableRoles(actor).length > 0;
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>จัดการทีมงาน</h1><div class="sub">${staff.length} คน · มุมมองปัจจุบัน: ${ROLE_LABELS_TH[actor]}</div></div>
+    <div class="page-note">ลำดับสิทธิ์: <b>เจ้าของระบบ</b> ทำได้ทุกอย่างและมีสิทธิ์ระงับ/ปลด ผู้ดูแลระดับสูง — <b>ผู้ดูแลระดับสูง</b> ทำได้เหมือนเจ้าของระบบยกเว้นลบหรือระงับบัญชีเจ้าของระบบ — <b>ผู้ดูแลระบบ</b> จัดการสมาชิกลูกค้าและสร้างตลาดได้ แต่ตัดสินผลตลาด ปักหมุดแนะนำ จัดการการเงิน และหน้านี้ ต้องเป็นผู้ดูแลระดับสูงขึ้นไป บัญชีเจ้าของระบบแก้ไขไม่ได้จากที่นี่เสมอ ไม่ว่าจะเข้าดูด้วยบทบาทใด — นี่คือระบบจำลองสำหรับสาธิตเท่านั้น (ยังไม่มีบัญชีผู้ใช้จริงหลายบัญชีหรือการยืนยันตัวตนจริง) ใช้ตัวสลับมุมมองที่แถบด้านบนเพื่อดูว่าแต่ละบทบาทเห็นอะไรบ้าง</div>
+    ${canAdd ? `
+    <div class="card" style="padding:18px 22px;margin-bottom:18px;">
+      <h3 style="font-size:14px;margin-bottom:12px;">เพิ่มทีมงานใหม่</h3>
+      <div class="inline-form">
+        <input id="nsName" type="text" placeholder="ชื่อ">
+        <input id="nsEmail" type="email" placeholder="อีเมล">
+        <select id="nsRole">${assignableRoles(actor).map(r=>`<option value="${r}">${ROLE_LABELS_TH[r]}</option>`).join('')}</select>
+        <button class="btn btn-primary" onclick="addStaffMember()">+ เพิ่มทีมงาน</button>
+      </div>
+    </div>` : ''}
+    <div class="card table-wrap"><table>
+      <tr><th>ทีมงาน</th><th>บทบาท</th><th>สถานะ</th><th></th></tr>
+      ${staff.map(s=>{
+        const isProtected = s.role==='owner';
+        const canAct = !isProtected && canActOnStaffRole(actor, s.role);
+        return `<tr>
+        <td><div class="lb-user"><div class="avatar" style="background:${userColor(s.name)}">${initials(s.name)}</div><div><b>${esc(s.name)}</b><div class="sub" style="font-size:11.5px;">${esc(s.email)}</div></div></div></td>
+        <td><span class="badge ${ROLE_BADGE[s.role]}">${ROLE_LABELS_TH[s.role]}</span>${isProtected?' <span class="sub" style="font-size:11px;">🔒 ป้องกันไว้</span>':''}</td>
+        <td><span class="status-dot status-${s.status}"></span>${s.status==='active'?'ใช้งานอยู่':'ระงับการใช้งาน'}</td>
+        <td><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+          ${canAct ? `
+            <button class="btn btn-sm btn-outline" onclick="toggleRoleEditor('${s.id}')">${expandedRole===s.id?'ยกเลิก':'เปลี่ยนบทบาท'}</button>
+            <button class="btn btn-sm ${s.status==='active'?'btn-no':'btn-yes'}" onclick="toggleStaffStatus('${s.id}')">${s.status==='active'?'ระงับ':'เปิดใช้งานอีกครั้ง'}</button>
+            <button class="btn btn-sm btn-ghost" onclick="removeStaffMember('${s.id}')">ลบ</button>
+          ` : `<span class="sub" style="font-size:12px;">${isProtected?'บัญชีเจ้าของระบบ':'ไม่มีสิทธิ์จัดการบัญชีนี้'}</span>`}
+        </div></td>
+      </tr>
+      ${(canAct && expandedRole===s.id) ? `<tr class="row-expand"><td colspan="4"><div class="sell-row-form">
+          <span class="sub">เปลี่ยนบทบาทของ ${esc(s.name)} เป็น</span>
+          ${assignableRoles(actor).map(r=>`<button class="btn btn-sm ${r===s.role?'btn-primary':'btn-outline'}" onclick="changeStaffRole('${s.id}','${r}')">${ROLE_LABELS_TH[r]}</button>`).join('')}
+        </div></td></tr>` : ''}`;
+      }).join('')}
+    </table></div>
+  `;
+}
+draw();
+
+</script>
+</body>
+</html>

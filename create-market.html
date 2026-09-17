@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — แนะนำกระทู้ใหม่</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+if(!requireLogin()) throw new Error('ต้องเข้าสู่ระบบก่อนจึงจะแนะนำกระทู้ใหม่ได้');
+
+let notifications = loadNotifications();
+let balance = loadBalance();
+document.getElementById('root').innerHTML = traderShell(null, Session.current(), balance, notifications.some(n=>!n.read));
+
+document.getElementById('view').innerHTML = `
+  <div class="view-header"><h1>แนะนำกระทู้ใหม่</h1></div>
+  <div class="page-note">กระทู้ที่คุณแนะนำจะยังไม่ขึ้นแสดงทันที — ผู้ดูแลระบบจะตรวจสอบและกดอนุมัติก่อน จึงจะปรากฏในหน้าตลาดให้ทุกคนเทรดได้</div>
+  <div class="card" style="max-width:560px;padding:24px;">
+    <div class="field"><label for="cmQ">คำถาม</label><input id="cmQ" type="text" placeholder="___ จะเกิดขึ้นภายใน ___ หรือไม่?"></div>
+    <div class="field"><label for="cmCat">หมวดหมู่</label><select id="cmCat">${CATEGORIES.map(c=>'<option value="'+c+'">'+catTh(c)+'</option>').join('')}</select></div>
+    <div class="field"><label for="cmDesc">กติกาการตัดสิน</label><textarea id="cmDesc" placeholder="อธิบายให้ชัดเจนว่ากระทู้นี้จะตัดสินผลอย่างไรและเมื่อใด พร้อมระบุแหล่งอ้างอิง"></textarea></div>
+    <div class="field"><label for="cmDate">วันที่ตัดสินผล</label><input id="cmDate" type="date" value="${defaultFutureDate(30)}"></div>
+    <div class="field">
+      <label for="cmYes">ความน่าจะเป็นเริ่มต้น</label>
+      <input id="cmYes" type="range" min="1" max="99" value="50" oninput="document.getElementById('cmYesLabel').textContent=this.value+'% ใช่ / '+(100-this.value)+'% ไม่'">
+      <div class="hint" id="cmYesLabel" style="margin-top:8px;">50% ใช่ / 50% ไม่</div>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="submitCreate()">ส่งคำแนะนำ</button>
+    <p class="hint" style="margin-top:10px;">การแนะนำนี้จะถูกส่งไปรอตรวจสอบที่หน้าจัดการตลาดของผู้ดูแลระบบ — เป็นข้อมูลที่บันทึกไว้ในเบราว์เซอร์นี้เท่านั้น (ยังไม่ใช่ฐานข้อมูลจริง) ทีมพัฒนาแบ็กเอนด์ของคุณจะเชื่อมขั้นตอนนี้เข้ากับ API จริงในภายหลัง</p>
+  </div>
+`;
+function submitCreate(){
+  const q = document.getElementById('cmQ').value.trim();
+  if(!q){ toast('กรุณาใส่คำถามของกระทู้', true); return; }
+  const user = Session.current();
+  const suggestion = {
+    id: 'p'+Math.random().toString(36).slice(2,8),
+    category: document.getElementById('cmCat').value,
+    question: q,
+    yesPrice: Number(document.getElementById('cmYes').value)||50,
+    closes: document.getElementById('cmDate').value,
+    rules: document.getElementById('cmDesc').value.trim()||'กติกาการตัดสินตามที่อธิบายไว้ข้างต้น',
+    submittedBy: user ? user.name : 'ผู้เทรด',
+    submittedAt: 'เมื่อสักครู่',
+    status: 'pending',
+  };
+  const list = loadPendingSuggestions();
+  list.unshift(suggestion);
+  savePendingSuggestions(list);
+  toast('ส่งคำแนะนำกระทู้เรียบร้อยแล้ว รอผู้ดูแลระบบตรวจสอบ');
+  setTimeout(()=>{ location.href = 'index.html'; }, 700);
+}
+wireSearch();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — รายละเอียดตลาด</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+if(!requireLogin()) throw new Error('ต้องเข้าสู่ระบบก่อนจึงจะเปิดดูกระทู้นี้ได้');
+
+let markets = loadMarkets();
+let notifications = loadNotifications();
+let activity = loadActivityLog();
+let positions = loadPositions();
+let balance = loadBalance();
+let tradeSide = qs('side')==='no' ? 'no' : 'yes';
+let tradeMode = 'buy';
+let lastTradeAmt = '';
+let chartRange = 'all';
+let comments = loadComments();
+let detailTab = 'comments';
+let commentDraft = '';
+let replyOpenId = null;
+
+const m0 = markets.find(x=>x.id===qs('id'));
+document.getElementById('root').innerHTML = traderShell(m0?m0.category:null, Session.current(), balance, notifications.some(n=>!n.read));
+
+function ownedShares(id, side){ const p = positions.find(x=>x.marketId===id && x.side===side && !x.settled); return p ? p.shares : 0; }
+function setSide(id, side){ tradeSide = side; lastTradeAmt = ''; draw(); }
+function setMode(id, mode){ tradeMode = mode; lastTradeAmt = ''; draw(); }
+function setAmt(v){ lastTradeAmt = v; const el=document.getElementById('tradeAmt'); if(el) el.value=v; updateSummary(qs('id')); }
+function setRange(id, r){ chartRange = r; draw(); }
+function setDetailTab(t){ detailTab = t; replyOpenId = null; draw(); }
+function marketComments(id){ return (comments[id] || []).slice().sort((a,b)=>b.ts-a.ts); }
+function postComment(id){
+  const el = document.getElementById('commentInput');
+  const val = (el ? el.value : commentDraft || '').trim();
+  if(!val) return;
+  const user = Session.current();
+  const list = comments[id] || (comments[id] = []);
+  list.unshift({ id:'c'+Date.now()+Math.random().toString(36).slice(2,6), user:user.name, avatarLetter:user.avatarLetter, avatarColor:user.avatarColor, text:val, ts:Date.now(), likes:0, liked:false, replies:[] });
+  saveComments(comments);
+  commentDraft = '';
+  draw();
+}
+function toggleReplyBox(cid){ replyOpenId = replyOpenId===cid ? null : cid; draw(); }
+function postReply(id, cid){
+  const el = document.getElementById('replyInput_'+cid);
+  const val = (el ? el.value : '').trim();
+  if(!val) return;
+  const list = comments[id] || [];
+  const c = list.find(x=>x.id===cid);
+  if(!c) return;
+  const user = Session.current();
+  c.replies = c.replies || [];
+  c.replies.push({ id:'r'+Date.now()+Math.random().toString(36).slice(2,6), user:user.name, avatarLetter:user.avatarLetter, avatarColor:user.avatarColor, text:val, ts:Date.now() });
+  saveComments(comments);
+  replyOpenId = null;
+  draw();
+}
+function toggleLikeComment(id, cid){
+  const list = comments[id] || [];
+  const c = list.find(x=>x.id===cid);
+  if(!c) return;
+  c.liked = !c.liked;
+  c.likes = (c.likes||0) + (c.liked ? 1 : -1);
+  saveComments(comments);
+  draw();
+}
+function commentItemHtml(id, c){
+  return `<div class="comment-item">
+    <div class="avatar" style="width:32px;height:32px;font-size:12.5px;background:${c.avatarColor||userColor(c.user)}">${esc(c.avatarLetter||c.user[0].toUpperCase())}</div>
+    <div class="comment-body">
+      <div class="comment-head"><span class="comment-user">${esc(c.user)}</span><span class="comment-time">${timeAgo(c.ts)}</span></div>
+      <div class="comment-text">${esc(c.text)}</div>
+      <div class="comment-actions">
+        <button class="${c.liked?'liked':''}" onclick="toggleLikeComment('${id}','${c.id}')">${c.liked?'♥':'♡'} ถูกใจ${c.likes?' ('+c.likes+')':''}</button>
+        <button onclick="toggleReplyBox('${c.id}')">ตอบกลับ</button>
+      </div>
+      ${(c.replies&&c.replies.length) ? `<div class="comment-replies">${c.replies.map(r=>`
+        <div class="comment-item">
+          <div class="avatar" style="width:26px;height:26px;font-size:11px;background:${r.avatarColor||userColor(r.user)}">${esc(r.avatarLetter||r.user[0].toUpperCase())}</div>
+          <div class="comment-body">
+            <div class="comment-head"><span class="comment-user">${esc(r.user)}</span><span class="comment-time">${timeAgo(r.ts)}</span></div>
+            <div class="comment-text">${esc(r.text)}</div>
+          </div>
+        </div>`).join('')}</div>` : ''}
+      ${replyOpenId===c.id ? `<div class="reply-compose">
+        <input id="replyInput_${c.id}" type="text" placeholder="ตอบกลับ ${esc(c.user)}..." onkeydown="if(event.key==='Enter'){postReply('${id}','${c.id}')}">
+        <button class="btn btn-primary btn-sm" onclick="postReply('${id}','${c.id}')">ตอบกลับ</button>
+      </div>` : ''}
+    </div>
+  </div>`;
+}
+function commentsTabHtml(m){
+  const list = marketComments(m.id);
+  const me = Session.current();
+  return `
+    <div class="comment-compose">
+      <div class="avatar" style="width:32px;height:32px;font-size:12.5px;${avatarStyle(me.avatarColor, me.avatarImage)}">${avatarLabel(me.avatarLetter, me.avatarImage)}</div>
+      <input id="commentInput" type="text" placeholder="เพิ่มความคิดเห็น..." value="${esc(commentDraft)}" oninput="commentDraft=this.value" onkeydown="if(event.key==='Enter'){postComment('${m.id}')}">
+      <button class="btn btn-primary btn-sm" onclick="postComment('${m.id}')">โพสต์</button>
+    </div>
+    ${list.length ? list.map(c=>commentItemHtml(m.id,c)).join('') : emptyState('💬','ยังไม่มีความคิดเห็น','เป็นคนแรกที่แสดงความคิดเห็นในตลาดนี้')}
+  `;
+}
+function updateSummary(id){
+  const m = markets.find(x=>x.id===id);
+  const el = document.getElementById('tradeSummary');
+  if(!el) return;
+  if(tradeMode==='sell') el.innerHTML = sellSummaryHtml(m, tradeSide, Number(lastTradeAmt)||0, ownedShares(id, tradeSide));
+  else el.innerHTML = tradeSummaryHtml(m, tradeSide, Number(lastTradeAmt)||0);
+}
+
+function placeTrade(id){
+  const m = markets.find(x=>x.id===id);
+  const side = tradeSide;
+  if(tradeMode==='sell'){
+    const pos = positions.find(p=>p.marketId===id && p.side===side && !p.settled);
+    const owned = pos ? pos.shares : 0;
+    const qty = Math.min(Number(document.getElementById('tradeAmt').value)||0, owned);
+    if(qty<=0){ toast('กรุณาระบุจำนวนหุ้นที่ต้องการขาย', true); return; }
+    const quote = ammSellQuote(m, side, qty);
+    const grossProceeds = quote.proceeds;
+    const sellFeePct = loadSettings().sellFeePct || 0;
+    const sellFee = grossProceeds * sellFeePct/100;
+    const proceeds = grossProceeds - sellFee;
+    balance += proceeds;
+    applySidePriceCents(m, side, quote.newSideCents);
+    const fraction = qty/pos.shares;
+    pos.cost -= pos.cost*fraction;
+    pos.shares -= qty;
+    if(pos.shares < 0.0001) positions = positions.filter(p=>p!==pos);
+    m.volume += grossProceeds;
+    m.history.push({t:m.history.length, yes:m.yesPrice});
+    activity.unshift({ user:'คุณ', action:'sold', side, marketId:id, amount:proceeds, time:'เมื่อสักครู่' });
+    lastTradeAmt = '';
+    toast(sellFee>0
+      ? ('ขาย '+qty.toFixed(2)+' หุ้น '+(side==='yes'?'ใช่':'ไม่')+' สำเร็จ ได้รับ '+money(proceeds)+' (ค่าธรรมเนียม '+money(sellFee)+') แล้ว')
+      : ('ขาย '+qty.toFixed(2)+' หุ้น '+(side==='yes'?'ใช่':'ไม่')+' สำเร็จ ได้รับ '+money(proceeds)+' แล้ว'));
+    saveBalance(balance); savePositions(positions); saveMarkets(markets); saveActivityLog(activity);
+    syncBalancePill(balance);
+    draw();
+    return;
+  }
+  const amount = Number(document.getElementById('tradeAmt').value);
+  if(!amount || amount<=0){ toast('กรุณาระบุจำนวนเงินที่จะเทรด', true); return; }
+  if(amount > balance){ toast('จำนวนเงินเกินยอดคงเหลือที่ใช้ได้ของคุณ', true); return; }
+  const feePct = loadSettings().feePct || 0;
+  const fee = amount * feePct/100;
+  const net = amount - fee;
+  const quote = ammBuyQuote(m, side, net);
+  const shares = quote.shares;
+  balance -= amount;
+  applySidePriceCents(m, side, quote.newSideCents);
+  let pos = positions.find(p=>p.marketId===id && p.side===side && !p.settled);
+  if(pos){ const totalCost=pos.cost+amount, totalShares=pos.shares+shares; pos.avgPrice=totalCost/totalShares; pos.shares=totalShares; pos.cost=totalCost; }
+  else { positions.push({ marketId:id, side, shares, avgPrice:amount/shares, cost:amount }); }
+  m.volume += amount;
+  m.history.push({t:m.history.length, yes:m.yesPrice});
+  activity.unshift({ user:'คุณ', action:'bought', side, marketId:id, amount, time:'เมื่อสักครู่' });
+  lastTradeAmt = '';
+  toast(fee>0
+    ? ('ซื้อ '+shares.toFixed(2)+' หุ้น '+(side==='yes'?'ใช่':'ไม่')+' ด้วยเงิน '+money(amount)+' (ค่าธรรมเนียม '+money(fee)+') แล้ว')
+    : ('ซื้อ '+shares.toFixed(2)+' หุ้น '+(side==='yes'?'ใช่':'ไม่')+' ด้วยเงิน '+money(amount)+' แล้ว'));
+  saveBalance(balance); savePositions(positions); saveMarkets(markets); saveActivityLog(activity);
+  syncBalancePill(balance);
+  draw();
+}
+
+function draw(){
+  const m = markets.find(x=>x.id===qs('id'));
+  if(!m){
+    document.getElementById('view').innerHTML = emptyState('404','ไม่พบตลาดนี้','รหัสตลาดนี้ไม่มีอยู่ในระบบทดลองนี้') +
+      `<div style="text-align:center;"><a class="btn btn-primary" href="index.html">กลับไปหน้าตลาด</a></div>`;
+    return;
+  }
+  const closed = m.status==='resolved';
+  const relatedAct = activity.filter(a=>a.marketId===m.id).slice(0,6);
+  const ranges = [['1w','1W'],['1m','1M'],['all','All']];
+  document.getElementById('view').innerHTML = `
+    <a class="sub" href="index.html?cat=${encodeURIComponent(m.category)}" style="display:inline-block;margin-bottom:10px;">← ${catTh(m.category)}</a>
+    <div class="detail-grid">
+      <div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;">
+          ${catIcon(m)}
+          <h1 style="font-size:22px;">${esc(m.question)}</h1>
+        </div>
+        <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;">
+          ${closed ? `<span class="badge ${m.outcome==='yes'?'badge-yes':'badge-no'}">ตัดสินแล้ว ${m.outcome==='yes'?'ใช่':'ไม่'}</span>` : `<span class="badge badge-accent">เปิดอยู่</span>`}
+          <span class="badge">ปิดรับ ${m.closes}</span>
+          ${m.featured?'<span class="badge badge-accent">แนะนำ</span>':''}
+        </div>
+        <div class="price-row"><span class="big" style="color:${m.yesPrice>=50?'var(--yes-strong)':'var(--no-strong)'}">${pct(m.yesPrice)}</span><span class="sub">โอกาสที่จะเป็น "ใช่" ในตอนนี้</span></div>
+        <div class="range-tabs">${ranges.map(r=>`<button class="${chartRange===r[0]?'active':''}" onclick="setRange('${m.id}','${r[0]}')">${r[1]}</button>`).join('')}</div>
+        <div class="chart-wrap card" style="padding:14px 14px 4px;">${priceChart(m.history, {range:chartRange})}</div>
+        <div class="stat-row">
+          <div class="stat"><span class="v mono">${money(m.volume)}</span><span class="k">ปริมาณ</span></div>
+          <div class="stat"><span class="v mono">${m.traders}</span><span class="k">ผู้เทรด</span></div>
+          <div class="stat"><span class="v mono">${m.createdBy}</span><span class="k">สร้างโดย</span></div>
+        </div>
+        ${orderBookHtml(m)}
+        <h3 style="font-size:15.5px;margin-bottom:8px;">กติกาการตัดสิน</h3>
+        <div class="prose"><p>${esc(m.rules)}</p></div>
+        <div class="detail-tabs">
+          ${[['comments','ความคิดเห็น ('+marketComments(m.id).length+')'],['holders','ผู้ถือรายใหญ่'],['status','สถานะ'],['activity','กิจกรรม']]
+            .map(t=>`<button class="detail-tab ${detailTab===t[0]?'active':''}" onclick="setDetailTab('${t[0]}')">${t[1]}</button>`).join('')}
+        </div>
+        <div class="detail-tabpanel">
+          ${detailTab==='comments' ? commentsTabHtml(m)
+            : detailTab==='holders' ? topHoldersHtml(m)
+            : detailTab==='status' ? holderStatusHtml(m)
+            : (relatedAct.length ? relatedAct.map(a=>activityItem(a, markets)).join('') : emptyState('—','ยังไม่มีกิจกรรม','เป็นคนแรกที่เทรดตลาดนี้'))}
+        </div>
+      </div>
+      <div class="trade-panel card" style="padding:18px;">${closed ? closedPanelHtml(m) : tradePanelHtml(m, tradeSide, balance, lastTradeAmt, tradeMode, ownedShares(m.id, tradeSide))}</div>
+    </div>
+  `;
+}
+draw();
+wireSearch();
+
+</script>
+</body>
+</html>

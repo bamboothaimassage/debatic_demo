@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — ประวัติการดำเนินการ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let adminLog = seedAdminLog();
+document.getElementById('root').innerHTML = adminShell('admin-activity.html', ADMIN_ACCOUNT);
+if(guardAdminRole('superadmin', 'ประวัติการดำเนินการ')){
+  document.getElementById('view').innerHTML = `
+    <div class="view-header"><h1>ประวัติการดำเนินการ</h1><div class="sub">การดำเนินการของเจ้าของระบบทั่วทั้งแพลตฟอร์ม</div></div>
+    <div class="page-note">นี่คือประวัติที่จำลองไว้สำหรับการสาธิต — ในผลิตภัณฑ์จริง การตัดสินผล การระงับ และการสร้างรายการจากหน้าจัดการสมาชิกและจัดการตลาดจะถูกบันทึกที่นี่โดยอัตโนมัติผ่านระบบหลังบ้าน</div>
+    <div class="card" style="padding:4px 14px;">${adminLog.map(l=>`<div class="activity-item"><div class="act-ic sys">✓</div><div class="act-body">${esc(l.text)}</div><div class="act-time">${l.time}</div></div>`).join('')}</div>
+  `;
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — วิธีการเล่น</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+let notifications = loadNotifications();
+let balance = loadBalance();
+const sessionUser = Session.current();
+document.getElementById('root').innerHTML = traderShell(null, sessionUser, balance, sessionUser && notifications.some(n=>!n.read));
+const items = [
+  ['หุ้น Yes หรือ No หมายความว่าอย่างไรกันแน่?','แต่ละตลาดจะจ่าย 1.00 ดอลลาร์ต่อหุ้น หากผลลัพธ์ออกมาตรงกับที่คุณคาดการณ์ไว้ และจ่าย 0.00 ดอลลาร์หากไม่ตรง ราคาที่คุณจ่ายต่อหุ้น — เช่น 62¢ สำหรับฝั่ง Yes — สะท้อนถึงโอกาสที่ตลาดประเมินไว้ในขณะนั้น ดังนั้นราคาของฝั่ง Yes และ No จะรวมกันได้ 1.00 ดอลลาร์เสมอ'],
+  ['ทำไมราคาถึงเปลี่ยนแปลง?','ทุกการเทรดจะส่งผลให้ราคาขยับเล็กน้อย การซื้อฝั่ง Yes จะดันราคา Yes ให้สูงขึ้น (และราคา No ลดลง) ส่วนการซื้อฝั่ง No จะเป็นไปในทิศทางตรงกันข้าม ในเดโมนี้เป็นเพียงการจำลองผลกระทบแบบง่าย ๆ แต่ในตลาดจริงราคาจะเปลี่ยนแปลงตามคำสั่งซื้อขายจริงของผู้ใช้'],
+  ['ตลาดมีการตัดสินผลอย่างไร?','แต่ละตลาดจะระบุกติกาการตัดสินและวันปิดตลาดไว้อย่างชัดเจน เมื่อทราบผลลัพธ์ที่เกิดขึ้นจริงแล้ว เจ้าของแพลตฟอร์มจะทำการระบุผลเป็น Yes หรือ No ผ่านหน้าคอนโซลผู้ดูแลระบบ และหุ้นทุกหุ้นในฝั่งที่ชนะจะได้รับเงิน 1.00 ดอลลาร์ต่อหุ้น'],
+  ['ฉันสามารถขายก่อนที่ตลาดจะตัดสินผลได้หรือไม่?','ได้ — คุณสามารถเข้าไปที่พอร์ตของคุณเพื่อขายโพซิชันบางส่วนหรือทั้งหมดได้ตามราคาปัจจุบัน ไม่ว่าจะช่วงเวลาใดก็ตามก่อนที่ตลาดจะตัดสินผล'],
+  ['นี่คือเงินจริงหรือไม่?','ไม่ใช่ ทุกอย่างบนเว็บไซต์นี้ — ไม่ว่าจะเป็นยอดคงเหลือ การฝากเงิน หรือการเทรด — ถูกเก็บไว้ในหน่วยความจำของหน้าที่คุณเปิดอยู่เท่านั้น และจะรีเซ็ตทุกครั้งที่คุณโหลดหน้าใหม่หรือย้ายไปหน้าอื่น'],
+  ['ใครสามารถสร้างตลาดได้บ้าง?','เทรดเดอร์ทุกคนสามารถเสนอสร้างตลาดแบบ Yes/No ได้ โดยกำหนดคำถาม กติกาการตัดสิน และวันปิดตลาด นอกจากนี้เจ้าของแพลตฟอร์มยังสามารถสร้างและตัดสินผลตลาดได้จากหน้าคอนโซลผู้ดูแลระบบ'],
+];
+document.getElementById('view').innerHTML = `
+  <div class="view-header"><h1>Debatic ทำงานอย่างไร</h1></div>
+  <div class="card" style="padding:6px 20px;max-width:720px;">
+    ${items.map((it,i)=>`<div class="accordion-item">
+      <div class="accordion-q" onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden"><span>${it[0]}</span><span class="sub">+</span></div>
+      <div class="accordion-a" ${i===0?'':'hidden'}>${it[1]}</div>
+    </div>`).join('')}
+  </div>
+`;
+wireSearch();
+
+</script>
+</body>
+</html>

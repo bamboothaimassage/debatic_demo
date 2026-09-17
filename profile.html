@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debatic — โปรไฟล์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<div id="root"></div>
+<script src="shared/app.js"></script>
+<script>
+
+if((qs('id')||'me')==='me' && !requireLogin()) throw new Error('ต้องเข้าสู่ระบบก่อนจึงจะดูโปรไฟล์ของคุณได้');
+
+let markets = loadMarkets();
+let notifications = loadNotifications();
+let positions = loadPositions();
+let activity = loadActivityLog();
+let balance = loadBalance();
+document.getElementById('root').innerHTML = traderShell(null, Session.current(), balance, notifications.some(n=>!n.read));
+function priceFor(m, side){ return side==='yes' ? m.yesPrice/100 : (100-m.yesPrice)/100; }
+function curVal(p){ const m = markets.find(x=>x.id===p.marketId); return m ? p.shares*priceFor(m,p.side) : 0; }
+
+function draw(){
+  const id = qs('id') || 'me';
+  const isMe = id==='me';
+  let user;
+  if(isMe) user = { name:DEMO_ACCOUNT.name, handle:DEMO_ACCOUNT.handle, color:DEMO_ACCOUNT.avatarColor, letter:DEMO_ACCOUNT.avatarLetter, image:loadProfileAvatarImage(), joined:DEMO_ACCOUNT.joined };
+  else { const u = LB_USERS.find(u=>u.handle==='@'+id || u.name===id); user = u ? { name:u.name, handle:u.handle, color:userColor(u.name), letter:initials(u.name), joined:'2025' } : null; }
+
+  if(!user){
+    document.getElementById('view').innerHTML = emptyState('404','ไม่พบโปรไฟล์','ไม่มีผู้เทรดที่ใช้ชื่อนี้ในระบบทดลองนี้');
+    return;
+  }
+  let volume, pnl, winRate, block;
+  if(isMe){
+    const settled = positions.filter(p=>p.settled);
+    volume = positions.reduce((s,p)=>s+p.cost,0);
+    pnl = settled.reduce((s,p)=>{ const m=markets.find(x=>x.id===p.marketId); const won=m.outcome===p.side; return s+((won?p.shares:0)-p.cost); },0)
+        + positions.filter(p=>!p.settled).reduce((s,p)=>s+(curVal(p)-p.cost),0);
+    winRate = settled.length ? settled.filter(p=>markets.find(x=>x.id===p.marketId).outcome===p.side).length/settled.length : 0;
+    block = `<h3 style="font-size:16px;margin:22px 0 8px;">โพสิชันที่เปิดอยู่</h3><div class="card table-wrap"><table><tr><th>ตลาด</th><th>ฝั่ง</th><th>จำนวนหุ้น</th><th>มูลค่า</th></tr>` +
+      positions.filter(p=>!p.settled).map(p=>{ const m=markets.find(x=>x.id===p.marketId); return `<tr><td><a href="market-detail.html?id=${m.id}">${esc(m.question)}</a></td><td><span class="badge ${p.side==='yes'?'badge-yes':'badge-no'}">${p.side==='yes'?'ใช่':'ไม่'}</span></td><td class="mono">${p.shares.toFixed(2)}</td><td class="mono">${money(curVal(p))}</td></tr>`; }).join('') + `</table></div>`;
+  } else {
+    const u = LB_USERS.find(u=>u.name===user.name);
+    volume = u.volume; pnl = u.pnl; winRate = u.winRate;
+    const acts = activity.filter(a=>a.user===user.name).slice(0,8);
+    block = `<h3 style="font-size:16px;margin:22px 0 8px;">กิจกรรมล่าสุด</h3>` + (acts.length ? acts.map(a=>activityItem(a, markets)).join('') : emptyState('—','ยังไม่มีกิจกรรมสาธารณะ',''));
+  }
+  document.getElementById('view').innerHTML = `
+    <div class="profile-head">
+      <div class="avatar" style="${avatarStyle(user.color, user.image)};width:64px;height:64px;font-size:22px;">${avatarLabel(user.letter, user.image)}</div>
+      <div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <h1>${esc(user.name)}</h1>
+          ${isMe ? `<button class="btn btn-outline btn-sm" style="gap:6px;" onclick="location.href='settings.html'" title="แก้ไขโปรไฟล์"><span style="font-size:14px;">⚙</span>แก้ไขโปรไฟล์</button>` : ''}
+        </div>
+        <div class="handle">${user.handle} · เข้าร่วมเมื่อ ${user.joined}</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      ${isMe ? `<div class="stat"><span class="v mono">${money(balance)}</span><span class="k">ยอดคงเหลือ</span></div>` : ''}
+      <div class="stat"><span class="v mono">${money(volume)}</span><span class="k">ปริมาณการเทรด</span></div>
+      <div class="stat"><span class="v mono ${pnl>=0?'pnl-pos':'pnl-neg'}">${pnl>=0?'+':''}${money(pnl)}</span><span class="k">กำไรขาดทุนสะสม</span></div>
+      <div class="stat"><span class="v mono">${Math.round(winRate*100)}%</span><span class="k">อัตราชนะ</span></div>
+    </div>
+    ${block}
+  `;
+}
+draw();
+wireSearch();
+
+</script>
+</body>
+</html>
