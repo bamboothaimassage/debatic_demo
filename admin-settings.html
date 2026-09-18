@@ -17,7 +17,7 @@
 let settings = loadSettings();
 let categories = [...CATEGORIES];
 let confirmingReset = false;
-let heroAds = loadHeroAds();
+let heroPromos = loadHeroPromos();
 let footerLinks = loadFooterLinks();
 let footerSocial = loadFooterSocial();
 document.getElementById('root').innerHTML = adminShell('admin-settings.html', ADMIN_ACCOUNT);
@@ -56,22 +56,22 @@ function removeCategory(c){
   toast('ลบหมวดหมู่แล้ว: '+c);
   draw();
 }
-function uploadHeroAd(idx, input){
+function uploadHeroPromo(idx, input){
   const file = input.files && input.files[0];
   if(!file) return;
   const reader = new FileReader();
   reader.onload = () => {
-    heroAds[idx].img = reader.result;
-    saveHeroAds(heroAds);
+    heroPromos[idx].img = reader.result;
+    saveHeroPromos(heroPromos);
     toast('อัปเดตรูปโฆษณาช่องที่ '+(idx+1)+' แล้ว');
     draw();
   };
   reader.readAsDataURL(file);
 }
-function updateHeroAdLabel(idx, val){ heroAds[idx].label = val; saveHeroAds(heroAds); }
-function resetHeroAd(idx){
-  heroAds[idx] = seedHeroAds()[idx];
-  saveHeroAds(heroAds);
+function updateHeroPromoLabel(idx, val){ heroPromos[idx].label = val; saveHeroPromos(heroPromos); }
+function resetHeroPromo(idx){
+  heroPromos[idx] = seedHeroPromos()[idx];
+  saveHeroPromos(heroPromos);
   toast('รีเซ็ตรูปโฆษณาช่องที่ '+(idx+1)+' เป็นค่าเริ่มต้นแล้ว');
   draw();
 }
@@ -172,13 +172,13 @@ function draw(){
       <h3 style="font-size:15px;margin-bottom:6px;">โฆษณา (หน้าตลาดทั้งหมด)</h3>
       <p class="sub" style="margin-bottom:14px;">รูปโฆษณา 2 ช่องที่แสดงมุมขวาบนของหน้าตลาดทั้งหมด (เห็นเมื่อยังไม่ได้กรองหมวดหมู่หรือช่วงเวลา) — ตอนนี้เป็นภาพตัวอย่างสำหรับสาธิตเท่านั้น ทีมพัฒนาฝั่งหลังบ้านของคุณจะเชื่อมส่วนนี้เข้ากับระบบโฆษณาจริงภายหลัง</p>
       <div style="display:flex;gap:18px;flex-wrap:wrap;">
-        ${heroAds.map((a,i)=>`
+        ${heroPromos.map((a,i)=>`
         <div style="flex:1;min-width:240px;">
           <div style="aspect-ratio:16/6;border-radius:var(--radius-m);border:1px solid var(--border);background-image:url('${a.img}');background-size:cover;background-position:center;margin-bottom:10px;"></div>
-          <div class="field"><label for="adLabel${i}">ป้ายกำกับ (ใช้ภายในเท่านั้น)</label><input id="adLabel${i}" type="text" value="${esc(a.label||'')}" onchange="updateHeroAdLabel(${i}, this.value)"></div>
+          <div class="field"><label for="promoLabel${i}">ป้ายกำกับ (ใช้ภายในเท่านั้น)</label><input id="promoLabel${i}" type="text" value="${esc(a.label||'')}" onchange="updateHeroPromoLabel(${i}, this.value)"></div>
           <div style="display:flex;gap:8px;">
-            <label class="btn btn-sm btn-outline" style="cursor:pointer;margin-bottom:0;">อัปโหลดรูปใหม่<input type="file" accept="image/*" style="display:none;" onchange="uploadHeroAd(${i}, this)"></label>
-            <button class="btn btn-sm btn-ghost" onclick="resetHeroAd(${i})">ใช้ค่าเริ่มต้น</button>
+            <label class="btn btn-sm btn-outline" style="cursor:pointer;margin-bottom:0;">อัปโหลดรูปใหม่<input type="file" accept="image/*" style="display:none;" onchange="uploadHeroPromo(${i}, this)"></label>
+            <button class="btn btn-sm btn-ghost" onclick="resetHeroPromo(${i})">ใช้ค่าเริ่มต้น</button>
           </div>
         </div>`).join('')}
       </div>
