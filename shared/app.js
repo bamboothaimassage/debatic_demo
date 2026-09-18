@@ -564,7 +564,7 @@ function hotMarketTagById(markets){
 }
 
 /* ---------- hero ad banners (admin-uploadable, demo-persisted like everything else) ---------- */
-function placeholderAdSvg(line1, line2, c1, c2){
+function placeholderPromoSvg(line1, line2, c1, c2){
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="225" viewBox="0 0 600 225">
     <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/>
@@ -575,20 +575,26 @@ function placeholderAdSvg(line1, line2, c1, c2){
   </svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
-function seedHeroAds(){
+// Named "promo" everywhere (not "ad"/"ads") on purpose: browser ad-blockers cosmetically
+// hide any element whose class/id matches generic ad-pattern filters like ##.ad, ##.ads,
+// ##[class*="-ad"] — which "hero-ad"/"hero-ads" matched exactly. That's why these boxes
+// could silently vanish in Chrome (with an ad-blocking extension) while looking fine in
+// Safari or a browser without one — nothing was wrong with the app or the data, the class
+// name itself was the trigger. Keep this naming (promo, not ad) for anything user-visible.
+function seedHeroPromos(){
   return [
-    { img: placeholderAdSvg('พื้นที่โฆษณาของคุณ', 'ตัวอย่าง — อัปโหลดได้ที่หน้าจัดการระบบ', '#1652F0', '#7C3AED'), label:'ตัวอย่างโฆษณา 1' },
-    { img: placeholderAdSvg('โปรโมทที่นี่', 'ตัวอย่าง — อัปโหลดได้ที่หน้าจัดการระบบ', '#0FA968', '#0E7490'), label:'ตัวอย่างโฆษณา 2' },
+    { img: placeholderPromoSvg('พื้นที่โฆษณาของคุณ', 'ตัวอย่าง — อัปโหลดได้ที่หน้าจัดการระบบ', '#1652F0', '#7C3AED'), label:'ตัวอย่างโฆษณา 1' },
+    { img: placeholderPromoSvg('โปรโมทที่นี่', 'ตัวอย่าง — อัปโหลดได้ที่หน้าจัดการระบบ', '#0FA968', '#0E7490'), label:'ตัวอย่างโฆษณา 2' },
   ];
 }
-function loadHeroAds(){ const v = Store.get('heroAds', null); return v===null ? seedHeroAds() : v; }
-function saveHeroAds(v){ Store.set('heroAds', v); }
+function loadHeroPromos(){ const v = Store.get('heroPromos', null); return v===null ? seedHeroPromos() : v; }
+function saveHeroPromos(v){ Store.set('heroPromos', v); }
 
 function heroSectionHtml(markets, activeSlide){
   const hot = hotMarkets(markets);
   if(!hot.length) return '';
   const idx = ((activeSlide||0) % hot.length + hot.length) % hot.length;
-  const ads = loadHeroAds();
+  const promos = loadHeroPromos();
   const slides = hot.map((h,i)=>{
     const m = h.m;
     return `<div class="hero-slide ${i===idx?'active':''}" onclick="location.href='market-detail.html?id=${m.id}'">
@@ -609,7 +615,7 @@ function heroSectionHtml(markets, activeSlide){
     </div>`;
   }).join('');
   const dots = hot.map((_,i)=>`<button class="hero-dot ${i===idx?'active':''}" onclick="event.stopPropagation(); setHeroSlide(${i})" aria-label="สไลด์ ${i+1}"></button>`).join('');
-  const adCol = ads.map(a=>`<div class="hero-ad" style="background-image:url('${a.img}')" title="${esc(a.label||'')}"></div>`).join('');
+  const promoCol = promos.map(a=>`<div class="hero-promo" style="background-image:url('${a.img}')" title="${esc(a.label||'')}"></div>`).join('');
   const hotList = hot.map((h,i)=>`<div class="hero-hot-row" onclick="location.href='market-detail.html?id=${h.m.id}'">
       <span class="hero-hot-rank">${i+1}</span>
       <span class="hero-hot-q">${esc(h.m.question)}</span>
@@ -626,7 +632,7 @@ function heroSectionHtml(markets, activeSlide){
       ${hot.length>1 ? `<div class="hero-dots">${dots}</div>` : ''}
     </div>
     <div class="hero-side">
-      <div class="hero-ads">${adCol}</div>
+      <div class="hero-promos">${promoCol}</div>
       <div class="hero-hotlist card">
         <div class="hero-hotlist-head">🔥 หัวข้อฮิต</div>
         ${hotList}
